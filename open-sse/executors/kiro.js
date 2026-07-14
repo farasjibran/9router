@@ -182,11 +182,14 @@ export class KiroExecutor extends BaseExecutor {
             
             // Handle continuation of thinking block from previous chunk
             if (state.inThinking) {
-              if (content.includes("</thinking>")) {
+              // Match closing tag case-insensitively: </thinking> or </think>
+              const closingMatch = content.match(/<\/think(?:ing)?>/i);
+              if (closingMatch) {
                 // Found the closing tag - extract content after it
                 state.inThinking = false;
-                const closingIndex = content.indexOf("</thinking>");
-                content = content.substring(closingIndex + "</thinking>".length);
+                const closingIndex = closingMatch.index;
+                const closingTagLength = closingMatch[0].length;
+                content = content.substring(closingIndex + closingTagLength);
                 // Strip leading newline after closing tag
                 if (content.startsWith("\n")) {
                   content = content.substring(1);
@@ -198,16 +201,18 @@ export class KiroExecutor extends BaseExecutor {
             }
             
             // Strip all complete thinking blocks (handles multiple blocks in one chunk)
-            // Use regex to remove all <thinking>...</thinking> pairs
-            if (!state.inThinking && content.includes("<thinking>")) {
-              const thinkingRegex = /<thinking>[\s\S]*?<\/thinking>\n?/g;
+            // Support both <thinking> and <think> tags (case-insensitive)
+            if (!state.inThinking && (/<think(?:ing)?>/ i.test(content))) {
+              // Remove all complete blocks with case-insensitive regex
+              const thinkingRegex = /<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>\n?/gi;
               content = content.replace(thinkingRegex, "");
               
               // Check if there's an unclosed thinking tag (thinking block continues to next chunk)
-              if (content.includes("<thinking>")) {
+              const uncloseMatch = content.match(/<think(?:ing)?>(?![\s\S]*?<\/think(?:ing)?>)/i);
+              if (uncloseMatch) {
                 state.inThinking = true;
                 // Keep content before the opening tag
-                const openingIndex = content.lastIndexOf("<thinking>");
+                const openingIndex = uncloseMatch.index;
                 content = content.substring(0, openingIndex);
               }
             }

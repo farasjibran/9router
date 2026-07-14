@@ -64,8 +64,8 @@ function extractThinking(text, state) {
     state.inThink = false;
   }
 
-  // Match <thinking> or <think> opening tags
-  const startRe = /<thinking>|<think>/i;
+  // Match <thinking> or <think> opening tags (case-insensitive)
+  const startRe = /<think(?:ing)?>/i;
   const startMatch = working.match(startRe);
 
   if (!startMatch) {
@@ -75,7 +75,11 @@ function extractThinking(text, state) {
   const tag = startMatch[0].toLowerCase();
   const closeTag = tag === "<think>" ? "</think>" : "</thinking>";
   const startIdx = startMatch.index;
-  const endIdx = working.indexOf(closeTag, startIdx + tag.length);
+  
+  // Search for closing tag case-insensitively
+  const closeRe = tag === "<think>" ? /<\/think>/i : /<\/thinking>/i;
+  const closeMatch = working.substring(startIdx + tag.length).match(closeRe);
+  const endIdx = closeMatch ? startIdx + tag.length + closeMatch.index : -1;
 
   if (endIdx === -1) {
     // Opening tag without closing — buffer for next chunk
@@ -85,10 +89,11 @@ function extractThinking(text, state) {
     return { thinking: null, text: before || null };
   }
 
-  // Complete block found
+  // Complete block found - extract thinking content
   const thinking = working.slice(startIdx + tag.length, endIdx);
   const before = working.slice(0, startIdx).trim();
-  const after = working.slice(endIdx + closeTag.length).trim();
+  const closingTagLength = closeMatch[0].length;
+  const after = working.slice(endIdx + closingTagLength).trim();
   const rest = [before, after].filter(Boolean).join("");
 
   // Recursively process for more blocks
