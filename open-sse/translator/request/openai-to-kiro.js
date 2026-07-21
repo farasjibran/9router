@@ -5,17 +5,13 @@
 import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { v4 as uuidv4 } from "uuid";
-import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay.js";
-import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager.js";
-import { KIRO_CONFIG } from "../../config/runtimeConfig.js";
+import { resolveSessionId } from "../../utils/sessionManager.js";
 import {
   resolveKiroModel,
   resolveKiroThinkingBudget,
   buildThinkingSystemPrefix,
   KIRO_AGENTIC_SYSTEM_PROMPT,
-  resolveDefaultProfileArn,
-  buildKiroAdditionalModelRequestFieldsForModel,
-  usesKiroNativeGptEffort
+  resolveDefaultProfileArn
 } from "../../config/kiroConstants.js";
 import { parseDataUri } from "../concerns/image.js";
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
@@ -513,10 +509,12 @@ function convertMessages(messages, tools, model) {
  *    Kiro's 2-3 minute server timeout. The suffix is stripped before being
  *    sent upstream.
  *
- * 2. Thinking / reasoning. Detection covers Anthropic-Beta header, Claude API
+ * 2. Thinking / reasoning. Kiro does not accept `thinking.type` or
+ *    `reasoning_effort` natively. The only way to enable reasoning is to
+ *    inject `<thinking_mode>enabled</thinking_mode>` into the user content
+ *    sent upstream. Detection covers Anthropic-Beta header, Claude API
  *    `thinking`, OpenAI `reasoning_effort`, AMP/Cursor magic tags, and model
- *    name hints. Supported models receive Kiro's schema-specific effort fields;
- *    legacy prompt tags remain only for models that need them.
+ *    name hints.
  */
 export function openaiToKiroRequest(model, body, stream, credentials) {
   const messages = body.messages || [];
@@ -527,8 +525,6 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
 
   const { upstream: upstreamModel, agentic } = resolveKiroModel(model);
   const thinkingBudget = resolveKiroThinkingBudget(body, credentials?.rawHeaders, model);
-  const additionalModelRequestFields = buildKiroAdditionalModelRequestFieldsForModel(body, upstreamModel);
-  const usesNativeGptEffort = usesKiroNativeGptEffort(body, upstreamModel);
 
   const { history, currentMessage } = convertMessages(messages, tools, upstreamModel);
 
@@ -550,97 +546,46 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
     ? (credentials?.providerSpecificData?.profileArn || "")
     : (credentials?.providerSpecificData?.profileArn || resolveDefaultProfileArn(authMethod));
 
+  let finalContent = currentMessage?.userInputMessage?.content || "";
+
   const timestamp = new Date().toISOString();
 
-  // Kiro CLI/KAS sends these as top-level systemPrompt. Keep a content fallback
-  // too because the CodeWhisperer surface does not always enforce top-level
-  // systemPrompt for direct calls.
-  const systemPromptParts = [];
-  if (thinkingBudget !== null && !usesNativeGptEffort) {
-    systemPromptParts.push(buildThinkingSystemPrefix(thinkingBudget));
+  // Build the system-prompt prefix that goes ABOVE the user message body.
+  // Order: thinking_mode tag first (so Kiro sees it before any user text),
+  // then context/timestamp marker, then optional agentic chunked-write prompt.
+  const prefixParts = [];
+  if (thinkingBudget !== null) {
+    prefixParts.push(buildThinkingSystemPrefix(thinkingBudget));
   }
+  prefixParts.push(`[Context: Current time is ${timestamp}]`);
   if (agentic) {
-    systemPromptParts.push(KIRO_AGENTIC_SYSTEM_PROMPT);
+    prefixParts.push(KIRO_AGENTIC_SYSTEM_PROMPT);
   }
-  const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n");
-  const currentTimeContext = `[Context: Current time is ${timestamp}]`;
-  const contentPrefix = [systemPrompt, currentTimeContext].filter(Boolean).join("\n\n");
-
-  const sessionIdentity = resolveSessionIdentity({ headers: credentials?.rawHeaders, body, connectionId: credentials?.connectionId, scope: "kiro" });
-  const conversationId = sessionIdentity.sessionId;
-  
-  let continuationId, replayCurrent, replayHistory;
-  
-  if (KIRO_CONFIG.enableVibeMode) {
-    // Vibe mode: advanced session replay with continuation tracking
-    continuationId = resolveContinuationId({
-      sessionId: conversationId,
-      connectionId: credentials?.connectionId,
-      scope: "kiro",
-      ephemeral: sessionIdentity.ephemeral,
-    });
-    const replay = applyKiroSessionReplay({
-      conversationId,
-      connectionId: credentials?.connectionId,
-      modelId: upstreamModel,
-      systemPrompt,
-      contentPrefix,
-      currentContentPrefix: currentTimeContext,
-      history,
-      currentMessage,
-    });
-    replayCurrent = replay.currentMessage?.userInputMessage || {};
-    replayHistory = replay.history;
-  } else {
-    // Legacy mode: simple content prefixing without session replay
-    const baseContent = currentMessage?.userInputMessage?.content || "";
-    const fullPrefix = [systemPrompt, currentTimeContext].filter(Boolean).join("\n\n");
-    replayCurrent = {
-      content: fullPrefix ? `${fullPrefix}\n\n${baseContent}` : baseContent,
-      modelId: upstreamModel,
-      origin: "AI_EDITOR",
-      ...(currentMessage?.userInputMessage?.images && {
-        images: currentMessage.userInputMessage.images,
-      }),
-      ...(currentMessage?.userInputMessage?.userInputMessageContext && {
-        userInputMessageContext: currentMessage.userInputMessage.userInputMessageContext,
-      }),
-    };
-    replayHistory = history;
-  }
+  finalContent = `${prefixParts.join("\n\n")}\n\n${finalContent}`;
 
   const payload = {
     conversationState: {
       chatTriggerType: "MANUAL",
-      conversationId,
-      ...(KIRO_CONFIG.enableVibeMode && {
-        agentContinuationId: continuationId,
-        agentTaskType: "vibe",
-      }),
+      conversationId: resolveSessionId({ headers: credentials?.rawHeaders, body, connectionId: credentials?.connectionId, scope: "kiro" }),
       currentMessage: {
         userInputMessage: {
-          content: replayCurrent.content || "",
+          content: finalContent,
           modelId: upstreamModel,
           origin: "AI_EDITOR",
-          ...(replayCurrent.images?.length > 0 && {
-            images: replayCurrent.images
+          ...(currentMessage?.userInputMessage?.images?.length > 0 && {
+            images: currentMessage.userInputMessage.images
           }),
-          ...(replayCurrent.userInputMessageContext && {
-            userInputMessageContext: replayCurrent.userInputMessageContext
+          ...(currentMessage?.userInputMessage?.userInputMessageContext && {
+            userInputMessageContext: currentMessage.userInputMessage.userInputMessageContext
           })
         }
       },
-      history: replayHistory
-    },
-    ...(KIRO_CONFIG.enableVibeMode && { agentMode: "vibe" }),
+      history: history
+    }
   };
 
   if (profileArn) {
     payload.profileArn = profileArn;
-  }
-  if (systemPrompt) payload.systemPrompt = systemPrompt;
-  if (additionalModelRequestFields) {
-    payload.additionalModelRequestFields = additionalModelRequestFields;
   }
 
   if (maxTokens || temperature !== undefined || topP !== undefined) {
