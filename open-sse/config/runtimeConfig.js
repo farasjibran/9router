@@ -23,6 +23,14 @@ export const CACHE_TTL = {
   modelAlias: 3600  // 1 hour
 };
 
+// Kiro feature flags
+export const KIRO_CONFIG = {
+  // Enable vibe mode fields (agentMode, agentTaskType, agentContinuationId)
+  // These fields are required for advanced Kiro CLI/KAS session replay
+  // but may not be supported by all Kiro API versions
+  enableVibeMode: process.env.KIRO_ENABLE_VIBE_MODE === "true",
+};
+
 // Memory management config
 export const MEMORY_CONFIG = {
   sessionTtlMs: 2 * 60 * 60 * 1000,

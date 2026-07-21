@@ -26,6 +26,7 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay.js";
 import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager.js";
+import { KIRO_CONFIG } from "../../config/runtimeConfig.js";
 import {
   resolveKiroModel,
   resolveKiroThinkingBudget,
@@ -441,23 +442,44 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
     scope: "kiro",
   });
   const conversationId = sessionIdentity.sessionId;
-  const continuationId = resolveContinuationId({
-    sessionId: conversationId,
-    connectionId: credentials?.connectionId,
-    scope: "kiro",
-    ephemeral: sessionIdentity.ephemeral,
-  });
-  const replay = applyKiroSessionReplay({
-    conversationId,
-    connectionId: credentials?.connectionId,
-    modelId: upstreamModel,
-    systemPrompt,
-    contentPrefix,
-    currentContentPrefix: currentTimeContext,
-    history,
-    currentMessage,
-  });
-  const replayCurrent = replay.currentMessage?.userInputMessage || {};
+  
+  let continuationId, replayCurrent, replayHistory;
+  
+  if (KIRO_CONFIG.enableVibeMode) {
+    // Vibe mode: advanced session replay with continuation tracking
+    continuationId = resolveContinuationId({
+      sessionId: conversationId,
+      connectionId: credentials?.connectionId,
+      scope: "kiro",
+      ephemeral: sessionIdentity.ephemeral,
+    });
+    const replay = applyKiroSessionReplay({
+      conversationId,
+      connectionId: credentials?.connectionId,
+      modelId: upstreamModel,
+      systemPrompt,
+      contentPrefix,
+      currentContentPrefix: currentTimeContext,
+      history,
+      currentMessage,
+    });
+    replayCurrent = replay.currentMessage?.userInputMessage || {};
+    replayHistory = replay.history;
+  } else {
+    // Legacy mode: simple content prefixing without session replay
+    const baseContent = currentMessage?.userInputMessage?.content || "";
+    const fullPrefix = [systemPrompt, currentTimeContext].filter(Boolean).join("\n\n");
+    replayCurrent = {
+      content: fullPrefix ? `${fullPrefix}\n\n${baseContent}` : baseContent,
+      ...(currentMessage?.userInputMessage?.userInputMessageContext && {
+        userInputMessageContext: currentMessage.userInputMessage.userInputMessageContext,
+      }),
+      ...(currentMessage?.userInputMessage?.images && {
+        images: currentMessage.userInputMessage.images,
+      }),
+    };
+    replayHistory = history;
+  }
   const userInputMessage = {
     content: replayCurrent.content || "",
     modelId: upstreamModel,
@@ -474,14 +496,16 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
     conversationState: {
       chatTriggerType: "MANUAL",
       conversationId,
-      agentContinuationId: continuationId,
-      agentTaskType: "vibe",
+      ...(KIRO_CONFIG.enableVibeMode && {
+        agentContinuationId: continuationId,
+        agentTaskType: "vibe",
+      }),
       currentMessage: {
         userInputMessage,
       },
-      history: replay.history,
+      history: replayHistory,
     },
-    agentMode: "vibe",
+    ...(KIRO_CONFIG.enableVibeMode && { agentMode: "vibe" }),
   };
 
   if (profileArn) payload.profileArn = profileArn;

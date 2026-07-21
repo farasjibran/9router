@@ -7,6 +7,7 @@ import { FORMATS } from "../formats.js";
 import { v4 as uuidv4 } from "uuid";
 import { applyKiroSessionReplay } from "../../utils/kiroSessionReplay.js";
 import { resolveContinuationId, resolveSessionIdentity } from "../../utils/sessionManager.js";
+import { KIRO_CONFIG } from "../../config/runtimeConfig.js";
 import {
   resolveKiroModel,
   resolveKiroThinkingBudget,
@@ -567,30 +568,55 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
 
   const sessionIdentity = resolveSessionIdentity({ headers: credentials?.rawHeaders, body, connectionId: credentials?.connectionId, scope: "kiro" });
   const conversationId = sessionIdentity.sessionId;
-  const continuationId = resolveContinuationId({
-    sessionId: conversationId,
-    connectionId: credentials?.connectionId,
-    scope: "kiro",
-    ephemeral: sessionIdentity.ephemeral,
-  });
-  const replay = applyKiroSessionReplay({
-    conversationId,
-    connectionId: credentials?.connectionId,
-    modelId: upstreamModel,
-    systemPrompt,
-    contentPrefix,
-    currentContentPrefix: currentTimeContext,
-    history,
-    currentMessage,
-  });
-  const replayCurrent = replay.currentMessage?.userInputMessage || {};
+  
+  let continuationId, replayCurrent, replayHistory;
+  
+  if (KIRO_CONFIG.enableVibeMode) {
+    // Vibe mode: advanced session replay with continuation tracking
+    continuationId = resolveContinuationId({
+      sessionId: conversationId,
+      connectionId: credentials?.connectionId,
+      scope: "kiro",
+      ephemeral: sessionIdentity.ephemeral,
+    });
+    const replay = applyKiroSessionReplay({
+      conversationId,
+      connectionId: credentials?.connectionId,
+      modelId: upstreamModel,
+      systemPrompt,
+      contentPrefix,
+      currentContentPrefix: currentTimeContext,
+      history,
+      currentMessage,
+    });
+    replayCurrent = replay.currentMessage?.userInputMessage || {};
+    replayHistory = replay.history;
+  } else {
+    // Legacy mode: simple content prefixing without session replay
+    const baseContent = currentMessage?.userInputMessage?.content || "";
+    const fullPrefix = [systemPrompt, currentTimeContext].filter(Boolean).join("\n\n");
+    replayCurrent = {
+      content: fullPrefix ? `${fullPrefix}\n\n${baseContent}` : baseContent,
+      modelId: upstreamModel,
+      origin: "AI_EDITOR",
+      ...(currentMessage?.userInputMessage?.images && {
+        images: currentMessage.userInputMessage.images,
+      }),
+      ...(currentMessage?.userInputMessage?.userInputMessageContext && {
+        userInputMessageContext: currentMessage.userInputMessage.userInputMessageContext,
+      }),
+    };
+    replayHistory = history;
+  }
 
   const payload = {
     conversationState: {
       chatTriggerType: "MANUAL",
       conversationId,
-      agentContinuationId: continuationId,
-      agentTaskType: "vibe",
+      ...(KIRO_CONFIG.enableVibeMode && {
+        agentContinuationId: continuationId,
+        agentTaskType: "vibe",
+      }),
       currentMessage: {
         userInputMessage: {
           content: replayCurrent.content || "",
@@ -604,9 +630,9 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
           })
         }
       },
-      history: replay.history
+      history: replayHistory
     },
-    agentMode: "vibe",
+    ...(KIRO_CONFIG.enableVibeMode && { agentMode: "vibe" }),
   };
 
   if (profileArn) {
