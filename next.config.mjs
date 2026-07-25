@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 // CLI bundling needs workspace root so tracing includes hoisted node_modules (slim ~50MB).
@@ -13,6 +14,7 @@ const proxyClientMaxBodySize = process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
+  productionBrowserSourceMaps: false,
   serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite"],
   turbopack: {
     root: tracingRoot
@@ -22,9 +24,17 @@ const nextConfig = {
     "*": ["./gitbook/**/*"]
   },
   images: {
-    unoptimized: true
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
   },
   env: {},
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
   experimental: {
     // #1529/#1572: LLM clients can send long context or base64 image payloads through /v1 rewrites.
     proxyClientMaxBodySize,
@@ -34,6 +44,12 @@ const nextConfig = {
     optimizePackageImports: ["@xyflow/react", "@dnd-kit/core", "@dnd-kit/sortable", "material-symbols", "marked"],
   },
   webpack: (config, { isServer }) => {
+    // Deduplicate immer to prevent duplicate bundles
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      immer: join(projectRoot, 'node_modules/immer'),
+    };
+
     // Ignore fs/path modules in browser bundle
     if (!isServer) {
       config.resolve.fallback = {
@@ -88,4 +104,8 @@ const nextConfig = {
   }
 };
 
-export default nextConfig;
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+export default bundleAnalyzer(nextConfig);

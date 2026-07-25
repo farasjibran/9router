@@ -7,6 +7,7 @@
     "dev": "next dev --port 20127",
     "dev:webpack": "next dev --webpack --port 20127",
     "build": "next build --webpack",
+    "analyze": "ANALYZE=true npm run build",
     "start": "next start --port 20127",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
     "build:bun": "bun --bun next build --webpack",
@@ -35,7 +36,6 @@
     "node-machine-id": "^1.1.12",
     "open": "^11.0.0",
     "ora": "^9.1.0",
-    "playwright": "^1.61.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-is": "^16.13.1",
@@ -52,9 +52,11 @@
   },
   "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools — sql.js is used as fallback at runtime",
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.11",
     "@tailwindcss/postcss": "^4.1.18",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.61.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4"
   }

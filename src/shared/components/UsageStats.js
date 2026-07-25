@@ -17,7 +17,7 @@ import UsageTable, { fmt, fmtTime } from "@/app/(dashboard)/dashboard/usage/comp
 import dynamic from "next/dynamic";
 // Lazy-load: keeps @xyflow/react out of the shared bundle until topology renders
 const ProviderTopology = dynamic(() => import("@/app/(dashboard)/dashboard/usage/components/ProviderTopology"), { ssr: false });
-import UsageChart from "@/app/(dashboard)/dashboard/usage/components/UsageChart";
+const UsageChart = dynamic(() => import("@/app/(dashboard)/dashboard/usage/components/UsageChart"), { ssr: false });
 
 function timeAgo(timestamp) {
   const diff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
