@@ -243,13 +243,19 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     : responseBody;
   const isClaudeMessageResponse = sourceFormat === FORMATS.CLAUDE && translatedResponse?.type === "message";
 
-  // Fix finish_reason for tool_calls: some providers return non-standard values (e.g. "other")
+  // Fix finish_reason: some providers return non-standard values (e.g. "other")
   if (translatedResponse?.choices?.[0]) {
     const choice = translatedResponse.choices[0];
     const msg = choice.message;
     const hasToolCalls = Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0;
+    
+    // If tool_calls exist but finish_reason is not "tool_calls", fix it
     if (hasToolCalls && choice.finish_reason !== "tool_calls") {
       choice.finish_reason = "tool_calls";
+    }
+    // If finish_reason is "other" without tool_calls, normalize to "stop"
+    else if (choice.finish_reason === "other" && !hasToolCalls) {
+      choice.finish_reason = "stop";
     }
   }
 

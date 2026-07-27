@@ -43,7 +43,9 @@ export function toOpenAIFinish(reason, format) {
         default: return OPENAI_FINISH.STOP;
       }
     default:
-      return reason || OPENAI_FINISH.STOP;
+      // Normalize non-standard finish_reason values (e.g. "other") to "stop"
+      if (!reason || reason === "other") return OPENAI_FINISH.STOP;
+      return reason;
   }
 }
 
