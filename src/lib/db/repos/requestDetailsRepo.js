@@ -4,7 +4,6 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
-const DEFAULT_MAX_JSON_SIZE = 5 * 1024;
 const CONFIG_CACHE_TTL_MS = 5000;
 
 let cachedConfig = null;
@@ -24,7 +23,6 @@ async function getObservabilityConfig() {
       maxRecords: settings.observabilityMaxRecords || parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
       batchSize: settings.observabilityBatchSize || parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
       flushIntervalMs: settings.observabilityFlushIntervalMs || parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
-      maxJsonSize: (settings.observabilityMaxJsonSize || parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
     };
   } catch {
     cachedConfig = {
@@ -32,7 +30,6 @@ async function getObservabilityConfig() {
       maxRecords: DEFAULT_MAX_RECORDS,
       batchSize: DEFAULT_BATCH_SIZE,
       flushIntervalMs: DEFAULT_FLUSH_INTERVAL_MS,
-      maxJsonSize: DEFAULT_MAX_JSON_SIZE,
     };
   }
   cachedConfigTs = Date.now();
@@ -58,14 +55,6 @@ function generateDetailId(model) {
   const random = Math.random().toString(36).substring(2, 8);
   const modelPart = model ? model.replace(/[^a-zA-Z0-9-]/g, "-") : "unknown";
   return `${timestamp}-${random}-${modelPart}`;
-}
-
-function truncateField(obj, maxSize) {
-  const str = JSON.stringify(obj || {});
-  if (str.length > maxSize) {
-    return { _truncated: true, _originalSize: str.length, _preview: str.substring(0, 200) };
-  }
-  return obj || {};
 }
 
 async function flushToDatabase() {
@@ -94,10 +83,10 @@ async function flushToDatabase() {
             status: item.status || null,
             latency: item.latency || {},
             tokens: item.tokens || {},
-            request: truncateField(item.request, config.maxJsonSize),
-            providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
-            providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
-            response: truncateField(item.response, config.maxJsonSize),
+            request: item.request || {},
+            providerRequest: item.providerRequest || {},
+            providerResponse: item.providerResponse || {},
+            response: item.response || {},
             pxpipe: item.pxpipe || undefined,
           };
 
