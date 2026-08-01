@@ -8,8 +8,8 @@ import { Modal, Button, Input } from "@/shared/components";
  * Kiro Auth Method Selection Modal
  * Auto-detects token from AWS SSO cache or allows manual import
  */
-export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
-  const [selectedMethod, setSelectedMethod] = useState(null);
+export default function KiroAuthModal({ isOpen, onMethodSelect, onClose, initialMethod = null }) {
+  const [selectedMethod, setSelectedMethod] = useState(initialMethod);
   const [idcStartUrl, setIdcStartUrl] = useState("");
   const [idcRegion, setIdcRegion] = useState("us-east-1");
   const [refreshToken, setRefreshToken] = useState("");
@@ -21,6 +21,13 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
   const [idcCredentials, setIdcCredentials] = useState(null);
+
+  // When opened from the automation panel with a preset flow, jump straight to
+  // that step instead of the method-selection list. Reset when reopened.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isOpen) setSelectedMethod(initialMethod);
+  }, [isOpen, initialMethod]);
 
   // Auto-detect token when import method is selected
   useEffect(() => {
@@ -592,4 +599,5 @@ KiroAuthModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onMethodSelect: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
+  initialMethod: PropTypes.string,
 };
