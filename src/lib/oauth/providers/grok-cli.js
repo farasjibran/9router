@@ -10,7 +10,8 @@ const grokCli = {
       client_id: config.clientId,
       scope: config.scope,
     });
-    // Official CLI sends referrer=grok-build
+    // referrer is intentionally omitted from config (matches the working
+    // CLIProxyAPI reference client). Kept as a fail-safe if a fork re-adds it.
     if (config.referrer) body.set("referrer", config.referrer);
 
     const response = await fetch(config.deviceCodeUrl, {

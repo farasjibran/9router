@@ -87,10 +87,12 @@ export default {
     deviceCodeUrl: "https://auth.x.ai/oauth2/device/code",
     tokenUrl: "https://auth.x.ai/oauth2/token",
     refreshUrl: "https://auth.x.ai/oauth2/token",
-    // HAR scope includes conversations read/write beyond the api-only xai scope
+    // Match the known-working CLIProxyAPI reference client exactly: minimal
+    // api-only scope, no referrer. The extra conversations:read/write scopes and
+    // referrer=grok-build correlate with xAI denying the device-code grant
+    // ("invalid_grant: Access denied") after the user approves.
     scope:
-      "openid profile email offline_access grok-cli:access api:access conversations:read conversations:write",
-    referrer: "grok-build",
+      "openid profile email offline_access grok-cli:access api:access",
     refreshLeadMs: 5 * 60 * 1000,
   },
 };
