@@ -15,7 +15,6 @@ import { translate } from "@/i18n/runtime";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
 import ModelRow from "./ModelRow";
-import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
 import ConnectionRow from "./ConnectionRow";
 import AddApiKeyModal from "./AddApiKeyModal";
@@ -1101,7 +1100,9 @@ export default function ProviderDetailPage() {
 
   const connectionsList = (
     <div className="flex min-w-0 flex-col divide-y divide-black/[0.03] dark:divide-white/[0.03]">
-      {connections.map((conn, index) => (
+      {pagedConnections.map((conn, pageIndex) => {
+        const index = (safePage - 1) * CONNECTIONS_PAGE_SIZE + pageIndex;
+        return (
         <div key={conn.id} className="flex min-w-0 items-stretch">
           <div className="flex shrink-0 items-center pl-1 sm:pl-2">
             <input
@@ -1167,7 +1168,8 @@ export default function ProviderDetailPage() {
             />
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 
