@@ -761,26 +761,31 @@ export class KiroExecutor extends BaseExecutor {
         let thinkingContent = "";
 
         if (state.inThinking) {
-          const end = content.indexOf("</thinking>");
-          if (end < 0) {
+          // Case-insensitive search for closing tag
+          const endMatch = content.match(/<\/(?:thinking|think)>/i);
+          if (!endMatch) {
             thinkingContent = content;
             content = "";
           } else {
             state.inThinking = false;
-            thinkingContent = content.slice(0, end);
-            content = content.slice(end + 11).replace(/^\n/u, "");
+            thinkingContent = content.slice(0, endMatch.index);
+            content = content.slice(endMatch.index + endMatch[0].length).replace(/^\n/u, "");
           }
         } else {
-          const start = content.indexOf("<thinking>");
-          if (start >= 0) {
-            const end = content.indexOf("</thinking>", start + 10);
-            if (end < 0) {
+          // Case-insensitive search for opening tag
+          const startMatch = content.match(/<(?:thinking|think)>/i);
+          if (startMatch) {
+            const start = startMatch.index;
+            const tagLen = startMatch[0].length;
+            const rest = content.slice(start + tagLen);
+            const endMatch = rest.match(/<\/(?:thinking|think)>/i);
+            if (!endMatch) {
               state.inThinking = true;
-              thinkingContent = content.slice(start + 10);
+              thinkingContent = rest;
               content = content.slice(0, start);
             } else {
-              thinkingContent = content.slice(start + 10, end);
-              content = content.slice(0, start) + content.slice(end + 11).replace(/^\n/u, "");
+              thinkingContent = rest.slice(0, endMatch.index);
+              content = content.slice(0, start) + rest.slice(endMatch.index + endMatch[0].length).replace(/^\n/u, "");
             }
           }
         }
@@ -799,8 +804,9 @@ export class KiroExecutor extends BaseExecutor {
         const value = event.payload?.reasoningContentEvent || event.payload || {};
         let content = typeof value === "string" ? value : value.text || value.content || "";
 
-        // Strip <thinking> tags if present (Kiro sometimes includes them)
-        content = content.replace(/<\/?thinking>/g, "");
+        // Strip <thinking>/<think> tags if present (Kiro sometimes includes them)
+        // Case-insensitive to handle <Thinking>, <THINKING>, etc.
+        content = content.replace(/<\/?(?:thinking|think)>/gi, "");
 
         if (content) {
           state.hasReasoning = true;

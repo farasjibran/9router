@@ -101,23 +101,29 @@ export function kiroToClaudeResponse(chunk, state) {
   }
 
   // Reasoning / thinking content (Kiro reasoningContentEvent → reasoning_content).
-  const reasoningContent = delta.reasoning_content || delta.reasoning;
+  let reasoningContent = delta.reasoning_content || delta.reasoning;
   if (reasoningContent) {
-    stopTextBlock(state, results);
-    if (!state.thinkingBlockStarted) {
-      state.thinkingBlockIndex = state.nextBlockIndex++;
-      state.thinkingBlockStarted = true;
+    // Strip any remaining <thinking>/<think> tags (defense-in-depth)
+    if (typeof reasoningContent === "string") {
+      reasoningContent = reasoningContent.replace(/<\/?(?:thinking|think)>/gi, "");
+    }
+    if (reasoningContent) {
+      stopTextBlock(state, results);
+      if (!state.thinkingBlockStarted) {
+        state.thinkingBlockIndex = state.nextBlockIndex++;
+        state.thinkingBlockStarted = true;
+        results.push({
+          type: "content_block_start",
+          index: state.thinkingBlockIndex,
+          content_block: { type: "thinking", thinking: "" },
+        });
+      }
       results.push({
-        type: "content_block_start",
+        type: "content_block_delta",
         index: state.thinkingBlockIndex,
-        content_block: { type: "thinking", thinking: "" },
+        delta: { type: "thinking_delta", thinking: reasoningContent },
       });
     }
-    results.push({
-      type: "content_block_delta",
-      index: state.thinkingBlockIndex,
-      delta: { type: "thinking_delta", thinking: reasoningContent },
-    });
   }
 
   // Regular text content.

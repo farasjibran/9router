@@ -93,10 +93,13 @@ export function kiroToOpenAIResponse(chunk, state) {
   // it to Claude thinking blocks / Anthropic reasoning / etc.
   if (eventType === "reasoningContentEvent" || data.reasoningContentEvent) {
     const reasoning = data.reasoningContentEvent || data;
-    const content = (typeof reasoning === "string")
+    let content = (typeof reasoning === "string")
       ? reasoning
       : (reasoning.text || reasoning.content || data.content || "");
     if (!content) return null;
+
+    // Strip <thinking>/<think> tags if present (case-insensitive)
+    content = content.replace(/<\/?(?:thinking|think)>/gi, "");
 
     const openaiChunk = buildChunk(chunkMeta(state), reasoningDelta(content, state.chunkIndex === 0), null);
 
