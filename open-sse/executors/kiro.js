@@ -758,11 +758,16 @@ export class KiroExecutor extends BaseExecutor {
       eventCounts[eventCountKey] = (eventCounts[eventCountKey] || 0) + 1;
       if (eventType === "assistantResponseEvent" && typeof event.payload?.content === "string") {
         let content = event.payload.content;
+        let thinkingContent = "";
+
         if (state.inThinking) {
           const end = content.indexOf("</thinking>");
-          if (end < 0) content = "";
-          else {
+          if (end < 0) {
+            thinkingContent = content;
+            content = "";
+          } else {
             state.inThinking = false;
+            thinkingContent = content.slice(0, end);
             content = content.slice(end + 11).replace(/^\n/u, "");
           }
         } else {
@@ -771,11 +776,19 @@ export class KiroExecutor extends BaseExecutor {
             const end = content.indexOf("</thinking>", start + 10);
             if (end < 0) {
               state.inThinking = true;
+              thinkingContent = content.slice(start + 10);
               content = content.slice(0, start);
             } else {
+              thinkingContent = content.slice(start + 10, end);
               content = content.slice(0, start) + content.slice(end + 11).replace(/^\n/u, "");
             }
           }
+        }
+
+        if (thinkingContent) {
+          state.hasReasoning = true;
+          state.totalContentLength += thinkingContent.length;
+          emitDelta(controller, { reasoning_content: thinkingContent });
         }
         if (content || !state.hasReasoning) {
           state.hasText ||= content.length > 0;
@@ -784,7 +797,11 @@ export class KiroExecutor extends BaseExecutor {
         }
       } else if (eventType === "reasoningContentEvent") {
         const value = event.payload?.reasoningContentEvent || event.payload || {};
-        const content = typeof value === "string" ? value : value.text || value.content || "";
+        let content = typeof value === "string" ? value : value.text || value.content || "";
+
+        // Strip <thinking> tags if present (Kiro sometimes includes them)
+        content = content.replace(/<\/?thinking>/g, "");
+
         if (content) {
           state.hasReasoning = true;
           state.totalContentLength += content.length;
