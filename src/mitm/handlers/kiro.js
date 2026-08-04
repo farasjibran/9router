@@ -375,31 +375,45 @@ function convertOpenAIToKiro(chunk, state) {
 
   // Handle explicit reasoning_content (type-specific thinking channel)
   if (delta.reasoning_content) {
-    frames.push(buildEventStreamFrame("reasoningContentEvent", {
-      content: delta.reasoning_content,
-      modelId
-    }));
-  }
-
-  // Handle text content — extract thinking blocks, emit rest as assistantResponseEvent
-  // ponytail: skip inline-tag parsing when reasoning_content field is also present in
-  // this chunk — otherwise the same thinking is emitted twice (once via field, once
-  // via inline-tag parsing). Revert if targeting legacy clients.
-  if (delta.content && !delta.reasoning_content) {
-    const { thinking, text } = extractThinking(delta.content, state);
-
-    if (thinking) {
+    // Defense-in-depth: strip tags even from dedicated thinking channel
+    const cleaned = delta.reasoning_content.replace(/<\/?(?:thinking|think)>/gi, "");
+    if (cleaned) {
       frames.push(buildEventStreamFrame("reasoningContentEvent", {
-        content: thinking,
+        content: cleaned,
         modelId
       }));
     }
+  }
 
-    if (text) {
-      frames.push(buildEventStreamFrame("assistantResponseEvent", {
-        content: text,
-        modelId
-      }));
+  // Handle text content — extract thinking blocks when no dedicated channel,
+  // or just strip tags when reasoning_content already handled thinking.
+  if (delta.content) {
+    if (delta.reasoning_content) {
+      // Dedicated thinking channel exists — just strip any stray inline tags
+      const cleaned = delta.content.replace(/<\/?(?:thinking|think)>/gi, "");
+      if (cleaned) {
+        frames.push(buildEventStreamFrame("assistantResponseEvent", {
+          content: cleaned,
+          modelId
+        }));
+      }
+    } else {
+      // No dedicated channel — extract thinking from inline tags
+      const { thinking, text } = extractThinking(delta.content, state);
+
+      if (thinking) {
+        frames.push(buildEventStreamFrame("reasoningContentEvent", {
+          content: thinking,
+          modelId
+        }));
+      }
+
+      if (text) {
+        frames.push(buildEventStreamFrame("assistantResponseEvent", {
+          content: text,
+          modelId
+        }));
+      }
     }
   }
 
