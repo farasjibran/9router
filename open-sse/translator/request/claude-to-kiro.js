@@ -33,6 +33,7 @@ import {
   resolveDefaultProfileArn,
 } from "../../config/kiroConstants.js";
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
+import { normalizeKiroToolSpecs } from "../concerns/kiroToolSpecs.js";
 import { ROLE, CLAUDE_BLOCK } from "../schema/index.js";
 
 /** Stringify a tool_use input as a readable line. */
@@ -122,24 +123,6 @@ function convertClaudeMessagesToKiro(messages, tools, model) {
 
   const clientProvidedTools = Array.isArray(tools) && tools.length > 0;
 
-  const buildToolSpecs = () =>
-    tools.map((t) => {
-      const name = t.name;
-      const description = t.description || `Tool: ${name}`;
-      const schema = t.input_schema || {};
-      const normalizedSchema =
-        Object.keys(schema).length === 0
-          ? { type: "object", properties: {}, required: [] }
-          : { ...schema, required: schema.required ?? [] };
-      return {
-        toolSpecification: {
-          name,
-          description,
-          inputSchema: { json: normalizedSchema },
-        },
-      };
-    });
-
   const flushPending = () => {
     if (currentRole === ROLE.USER) {
       const content = pendingUserContent.join("\n\n").trim() || "continue";
@@ -153,12 +136,15 @@ function convertClaudeMessagesToKiro(messages, tools, model) {
           toolResults: pendingToolResults,
         };
       }
-      // Attach tools to the first user turn only.
+      // Attach tools to the first user turn only. Canonicalize specs: cap
+      // over-length names, strip additionalProperties and empty required[]
+      // (Kiro 400s on all three).
       if (clientProvidedTools && !toolsInjected) {
         if (!userMsg.userInputMessage.userInputMessageContext) {
           userMsg.userInputMessage.userInputMessageContext = {};
         }
-        userMsg.userInputMessage.userInputMessageContext.tools = buildToolSpecs();
+        userMsg.userInputMessage.userInputMessageContext.tools =
+          normalizeKiroToolSpecs(tools).specs;
         toolsInjected = true;
       }
 

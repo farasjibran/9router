@@ -14,6 +14,7 @@ import {
   resolveDefaultProfileArn
 } from "../../config/kiroConstants.js";
 import { parseDataUri } from "../concerns/image.js";
+import { normalizeKiroToolSpecs } from "../concerns/kiroToolSpecs.js";
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
 import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
 
@@ -223,28 +224,10 @@ function convertMessages(messages, tools, model) {
         if (!userMsg.userInputMessage.userInputMessageContext) {
           userMsg.userInputMessage.userInputMessageContext = {};
         }
-        userMsg.userInputMessage.userInputMessageContext.tools = tools.map(t => {
-          const name = t.function?.name || t.name;
-          let description = t.function?.description || t.description || "";
-
-          if (!description.trim()) {
-            description = `Tool: ${name}`;
-          }
-
-          const schema = t.function?.parameters || t.parameters || t.input_schema || {};
-          // Normalize schema: Kiro requires required[] and proper type/properties
-          const normalizedSchema = Object.keys(schema).length === 0
-            ? { type: "object", properties: {}, required: [] }
-            : { ...schema, required: schema.required ?? [] };
-
-          return {
-            toolSpecification: {
-              name,
-              description,
-              inputSchema: { json: normalizedSchema }
-            }
-          };
-        });
+        // Canonicalize tool specs: cap over-length names, strip
+        // additionalProperties and empty required[] (Kiro 400s on all three).
+        userMsg.userInputMessage.userInputMessageContext.tools =
+          normalizeKiroToolSpecs(tools).specs;
         toolsInjectedToFirstUserMsg = true;
       }
 
