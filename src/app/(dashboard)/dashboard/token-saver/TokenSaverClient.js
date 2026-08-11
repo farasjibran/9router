@@ -44,6 +44,7 @@ export default function TokenSaverClient() {
   const [cavemanLevel, setCavemanLevel] = useState("full");
   const [ponytailEnabled, setPonytailEnabled] = useState(false);
   const [ponytailLevel, setPonytailLevel] = useState("full");
+  const [chinaFilterEnabled, setChinaFilterEnabled] = useState(false);
   const [pxpipeEnabled, setPxpipeEnabled] = useState(false);
   const [pxpipeMinChars, setPxpipeMinChars] = useState(25000);
   const [pxpipeStatus, setPxpipeStatus] = useState({
@@ -421,6 +422,7 @@ export default function TokenSaverClient() {
           setCavemanLevel(data.cavemanLevel || "full");
           setPonytailEnabled(!!data.ponytailEnabled);
           setPonytailLevel(data.ponytailLevel || "full");
+          setChinaFilterEnabled(!!data.chinaFilterEnabled);
           setPxpipeEnabled(!!data.pxpipeEnabled);
           if (typeof data.pxpipeMinChars === "number") setPxpipeMinChars(data.pxpipeMinChars);
           refreshHeadroomStatus();
@@ -732,6 +734,24 @@ export default function TokenSaverClient() {
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
           </div>
+        </div>
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">
+              China Filter
+            </p>
+            <p className="text-sm text-text-muted">
+              Force English/Indonesian output, never Chinese or other languages
+            </p>
+          </div>
+          <Toggle
+            checked={chinaFilterEnabled}
+            onChange={() => {
+              const next = !chinaFilterEnabled;
+              setChinaFilterEnabled(next);
+              patchSetting({ chinaFilterEnabled: next });
+            }}
+          />
         </div>
         {/* PXPIPE hidden from UI — experimental, not exposed to users yet */}
         {false && (
