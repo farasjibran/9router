@@ -381,8 +381,8 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "X-CLIENT-VERSION": "0.5.50",
     "X-CORE-VERSION": "0.5.50",
     "X-IS-MULTIROOT": "false",
-    "X-PLATFORM": "darwin",
-    "X-PLATFORM-VERSION": "v24.14.0",
+    "X-PLATFORM": "linux",
+    "X-PLATFORM-VERSION": "v24.15.0",
     "X-Title": "Cline",
   },
   "nonStream": {
@@ -394,8 +394,8 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "X-CLIENT-VERSION": "0.5.50",
     "X-CORE-VERSION": "0.5.50",
     "X-IS-MULTIROOT": "false",
-    "X-PLATFORM": "darwin",
-    "X-PLATFORM-VERSION": "v24.14.0",
+    "X-PLATFORM": "linux",
+    "X-PLATFORM-VERSION": "v24.15.0",
     "X-Title": "Cline",
   },
   "oauth": {
@@ -408,8 +408,8 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "X-CLIENT-VERSION": "0.5.50",
     "X-CORE-VERSION": "0.5.50",
     "X-IS-MULTIROOT": "false",
-    "X-PLATFORM": "darwin",
-    "X-PLATFORM-VERSION": "v24.14.0",
+    "X-PLATFORM": "linux",
+    "X-PLATFORM-VERSION": "v24.15.0",
     "X-Title": "Cline",
   },
 }
