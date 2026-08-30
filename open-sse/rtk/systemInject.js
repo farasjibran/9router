@@ -13,11 +13,9 @@ export function injectSystemPrompt(body, format, prompt) {
     if (!body || !prompt) return;
     if (typeof body !== "object") return;
 
-    // Kiro wire shape is unique (conversationState/systemPrompt) — handle directly.
-    if (isKiroBody(body) || format === FORMATS.KIRO) {
-      injectKiroSystem(body, prompt);
-      return;
-    }
+    // Kiro's GenerateAssistantResponse schema does not accept the generic
+    // systemPrompt field; its prompt is assembled by the Kiro translator.
+    if (isKiroBody(body) || format === FORMATS.KIRO) return;
 
     // Claude/Gemini own a dedicated system field, yet their bodies also carry
     // messages[]/contents[] — decide by format label before the shape sniff below.
