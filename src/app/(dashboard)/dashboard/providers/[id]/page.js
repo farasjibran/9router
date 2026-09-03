@@ -593,7 +593,7 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleAddCustomModel = async (
+const handleAddCustomModel = async (
     modelId,
     type = "llm",
     providerAliasOverride = providerStorageAlias,
@@ -2152,8 +2152,8 @@ export default function ProviderDetailPage() {
           isOpen={showAddCustomModel}
           providerAlias={providerStorageAlias}
           providerDisplayAlias={providerDisplayAlias}
-          onSave={async (modelId) => {
-            await handleAddCustomModel(modelId, "llm", providerStorageAlias);
+          onSave={async (modelId, caps) => {
+            await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps);
             setShowAddCustomModel(false);
           }}
           onClose={() => setShowAddCustomModel(false)}
