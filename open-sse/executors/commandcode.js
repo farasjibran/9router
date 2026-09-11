@@ -182,6 +182,9 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
 
         bufferedLines.push(trimmed);
 
+        // Stop reading FURTHER chunks once first content event seen (latency),
+        // but keep consuming the rest of THIS chunk — dropping them truncates
+        // the response whenever upstream bursts multiple events per TCP read.
         if (
           event?.type === "text-delta" ||
           event?.type === "reasoning-delta" ||
@@ -191,7 +194,6 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
           event?.type === "finish-step"
         ) {
           stopLoop = true;
-          break;
         }
       }
 
