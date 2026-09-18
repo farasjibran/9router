@@ -625,7 +625,7 @@ export default function ProviderDetailPage() {
         importedCount += 1;
       }
 
-      if (importedCount === 0 {
+      if (importedCount === 0) {
         alert(translate("All models already exist, no new models added"));
       } else {
         alert(translate("Successfully added") + ` ${importedCount} ` + translate("models"));
