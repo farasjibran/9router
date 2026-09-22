@@ -36,6 +36,11 @@ const nextConfig = {
     } : false,
   },
   experimental: {
+    // Keep build concurrency low enough for small CI/EC2 instances.
+    cpus: 1,
+    memoryBasedWorkersCount: true,
+    parallelServerCompiles: false,
+    parallelServerBuildTraces: false,
     // #1529/#1572: LLM clients can send long context or base64 image payloads through /v1 rewrites.
     proxyClientMaxBodySize,
     // Cache fetch responses across HMR refreshes for faster dev reloads.

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --port 20127",
     "dev:webpack": "next dev --webpack --port 20127",
-    "build": "next build --webpack",
+    "build": "NODE_OPTIONS=--max-old-space-size=${NEXT_BUILD_HEAP_MB:-1536} next build --webpack",
     "analyze": "ANALYZE=true npm run build",
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "postbuild:bun": "node scripts/copy-standalone-assets.mjs",
