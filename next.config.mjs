@@ -15,7 +15,11 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
   productionBrowserSourceMaps: false,
-  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open"],
+  // `open` must stay external: it derives its path from `import.meta.url`, which webpack
+  // bakes in as a build-machine literal (breaks Windows + xAI token refresh on import).
+  // @aws-sdk/credential-providers must stay external: reads ~/.aws/config + SSO cache
+  // from disk at runtime via dynamic require, neither survives bundling.
+  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open", "@aws-sdk/credential-providers"],
   turbopack: {
     root: tracingRoot
   },
