@@ -18,6 +18,10 @@ import {
   stableSessionId,
   deriveRequestId,
 } from "../../open-sse/executors/opencode.js";
+import {
+  generateSessionId as generateZenSessionId,
+  translateSessionId as translateZenSessionId,
+} from "../../open-sse/executors/opencode-zen.js";
 
 function makeCredentials(overrides = {}) {
   return {
@@ -76,6 +80,22 @@ describe("OpenCode Free Session ID Format", () => {
       expect(translated).toMatch(OPENCODE_SESSION_RE);
       expect(translated).toHaveLength(30);
     }
+  });
+
+  // Upstream decodes the prefix as ~(time * 0x1000 + counter) and answers
+  // 403 FreeTierError unless the counter is small; hash-filled prefixes failed.
+  it("encodes a small counter in session prefixes so the free-tier gate accepts them", () => {
+    const counterOf = (id) => Number(~BigInt(`0x${id.slice(4, 16)}`) & 0xfffn);
+    for (const translate of [translateSessionId, translateZenSessionId]) {
+      for (const raw of ["claude:550e8400-e29b-41d4-a716-446655440000", "session-from-codex", "", "x".repeat(300)]) {
+        const translated = translate(raw, "claude");
+        expect(translated).toMatch(OPENCODE_SESSION_RE);
+        expect(counterOf(translated)).toBe(1);
+        expect(translate(raw, "claude")).toBe(translated);
+      }
+    }
+    expect(counterOf(generateSessionId(1_700_000_000_000))).toBeLessThanOrEqual(16);
+    expect(counterOf(generateZenSessionId(1_700_000_000_000))).toBe(1);
   });
 
   it("preserves already-valid OpenCode sessions without re-hashing", () => {
