@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
+import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
@@ -13,21 +14,24 @@ const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeZenSession";
 const MAX_SESSION_LENGTH = 256;
 
-const RESPONSES_BASE_URL = "https://opencode.ai/zen/v1/responses";
+const ZEN_RESPONSES_BASE_URL = "https://opencode.ai/zen/v1/responses";
+const INFERENCE_RESPONSES_BASE_URL = "https://opencode.ai/inference/v1/responses";
 const MAX_TOOL_NAME_LEN = 128;
-const OPENCODE_UA = "opencode/1.18.31";
+// OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
+// the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
+const OPENCODE_UA = "opencode/latest/2.0.26/cli";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-// Free-tier fingerprint (mirrors opencode executor, PR #4132): upstream 403s
-// requests without the file-search quartet and without stream:true.
-const OPENCODE_FINGERPRINT_TOOLS = ["bash", "glob", "grep", "read"];
 
 function hasValidOpencodeVersion(ua) {
-  const m = String(ua || "").match(/opencode\/(\d+)\.(\d+)(?:\.(\d+))?/i);
-  if (!m) return false;
-  const major = parseInt(m[1], 10);
-  const minor = parseInt(m[2], 10);
-  return major > 1 || (major === 1 && minor >= 17);
+  const m = String(ua || "").match(/^opencode\/[a-z0-9-]+\/(\d+)\.\d+\.\d+\/[a-z0-9-]+$/i);
+  return !!m && parseInt(m[1], 10) >= 2;
+}
+
+// *-free models on the keyed lane hit the same v2 free-tier gate as oc/*.
+// They travel to /inference/v1; paid models stay on /zen/v1.
+function toInferenceUrl(url) {
+  return String(url || "").replace("opencode.ai/zen/v1/", "opencode.ai/inference/v1/");
 }
 
 function unstableRandom() {
@@ -39,15 +43,20 @@ function unstableRandom() {
   return randomPart;
 }
 
+// Session prefix = 12 hex of ~(timeMs * 0x1000 + counter), low 48 bits, like the CLI.
+// Upstream decodes it and rejects a non-small counter with 403 FreeTierError
+// (live probes: counter 0–16 pass, >=100 fail), so the counter must stay real.
+const SESSION_PREFIX_MASK = (1n << 48n) - 1n;
+const SESSION_TIME_MASK = (1n << 36n) - 1n;
+
+function descendingTimeHex(time, counterValue) {
+  return (~(BigInt(time) * 0x1000n + BigInt(counterValue)) & SESSION_PREFIX_MASK)
+    .toString(16)
+    .padStart(12, "0");
+}
+
 export function generateSessionId(timestamp = Date.now()) {
-  const current = BigInt(timestamp) * 0x1000n + 1n;
-  const value = ~current;
-  const time = Array.from({ length: 6 }, (_, index) =>
-    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
-      .toString(16)
-      .padStart(2, "0")
-  ).join("");
-  return `ses_${time}${unstableRandom()}`;
+  return `ses_${descendingTimeHex(timestamp, 1)}${unstableRandom()}`;
 }
 
 export function generateRequestId(timestamp = Date.now()) {
@@ -69,67 +78,14 @@ export function translateSessionId(sessionId, clientTool = "") {
     .createHash("sha256")
     .update(`opencode\0${clientTool || "generic"}\0${sessionId || ""}`)
     .digest();
-  const timeHex = digest.subarray(0, 6).toString("hex");
+  // Deterministic time field from the digest, counter pinned to 1 (what the CLI sends).
+  const time = BigInt(`0x${digest.subarray(0, 5).toString("hex")}`) & SESSION_TIME_MASK;
+  const timeHex = descendingTimeHex(time, 1);
   let randomPart = "";
   for (let i = 6; i < 20; i++) {
     randomPart += BASE62_CHARS[digest[i] % 62];
   }
   return `ses_${timeHex}${randomPart}`;
-}
-
-function toolNameOf(tool) {
-  if (!tool || typeof tool !== "object" || Array.isArray(tool)) return "";
-  const fn = tool.function && typeof tool.function === "object" && !Array.isArray(tool.function) ? tool.function : null;
-  const raw = typeof tool.name === "string" ? tool.name : (typeof fn?.name === "string" ? fn.name : "");
-  return raw.trim();
-}
-
-function ensureChatFingerprintTools(body) {
-  if (!body || typeof body !== "object") return;
-  const present = new Set();
-  if (Array.isArray(body.tools)) {
-    for (const tool of body.tools) {
-      const name = toolNameOf(tool);
-      if (name) present.add(name);
-    }
-  } else {
-    body.tools = [];
-  }
-  for (const name of OPENCODE_FINGERPRINT_TOOLS) {
-    if (present.has(name)) continue;
-    body.tools.push({
-      type: "function",
-      function: {
-        name,
-        description: `OpenCode built-in ${name} tool`,
-        parameters: { type: "object", properties: {} },
-      },
-    });
-    present.add(name);
-  }
-}
-
-function ensureResponsesFingerprintTools(body) {
-  if (!body || typeof body !== "object") return;
-  const present = new Set();
-  if (Array.isArray(body.tools)) {
-    for (const tool of body.tools) {
-      const name = toolNameOf(tool);
-      if (name) present.add(name);
-    }
-  } else {
-    body.tools = [];
-  }
-  for (const name of OPENCODE_FINGERPRINT_TOOLS) {
-    if (present.has(name)) continue;
-    body.tools.push({
-      type: "function",
-      name,
-      description: `OpenCode built-in ${name} tool`,
-      parameters: { type: "object", properties: {} },
-    });
-    present.add(name);
-  }
 }
 
 function normalizeSession(value) {
@@ -157,6 +113,10 @@ function translatedSession(sessionId, clientTool) {
 // Strip the thinking suffix "model(level)" so checks hit the base id.
 function baseModelId(model) {
   return String(model || "").replace(/\([^()]+\)\s*$/, "").trim();
+}
+
+function isFreeModel(model) {
+  return baseModelId(model).endsWith("-free");
 }
 
 function isResponsesModel(model) {
@@ -233,8 +193,13 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     // Muse Spark lives on /responses even when a stale runtimeTransport leaks in.
-    if (isResponsesModel(model)) return RESPONSES_BASE_URL;
-    return super.buildUrl(model, stream, urlIndex, credentials);
+    // Free models moved from /zen/v1 to /inference/v1 (OpenCode v2, same gate as
+    // oc/*); paid models stay on /zen/v1.
+    if (isResponsesModel(model)) {
+      return isFreeModel(model) ? INFERENCE_RESPONSES_BASE_URL : ZEN_RESPONSES_BASE_URL;
+    }
+    const url = super.buildUrl(model, stream, urlIndex, credentials);
+    return isFreeModel(model) ? toInferenceUrl(url) : url;
   }
 
   prepareRequestCredentials({ body, credentials, providerSessionId, clientTool } = {}) {
@@ -267,14 +232,22 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     // Free-tier gate: spoof the official client UA.
     headers["User-Agent"] = hasValidOpencodeVersion(downstreamUa) ? downstreamUa : OPENCODE_UA;
     headers["x-opencode-client"] = lower["x-opencode-client"] || "desktop";
+    headers["x-opencode-project"] = lower["x-opencode-project"] || "global";
     const prepared = credentials?.[SESSION_FIELD];
     if (prepared) {
       headers[SESSION_HEADER] = prepared;
+      headers["x-opencode-session-id"] = prepared;
+      headers["x-session-affinity"] = prepared;
+      headers["x-session-id"] = prepared;
       return headers;
     }
 
     const fallback = this.prepareRequestCredentials({ credentials });
-    headers[SESSION_HEADER] = fallback[SESSION_FIELD];
+    const fallbackSession = fallback[SESSION_FIELD];
+    headers[SESSION_HEADER] = fallbackSession;
+    headers["x-opencode-session-id"] = fallbackSession;
+    headers["x-session-affinity"] = fallbackSession;
+    headers["x-session-id"] = fallbackSession;
     return headers;
   }
 
@@ -283,7 +256,9 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     // Free-tier gate: upstream 403s stream:false even when everything else is valid.
     if (out && typeof out === "object") out.stream = true;
     if (!isResponsesModel(model || body?.model)) {
-      ensureChatFingerprintTools(out);
+      // Canonical read/shell fingerprint (same v2 gate as oc/*). The old
+      // bash/glob/grep/read stubs are answered with 403 FreeTierError.
+      applyFingerprintTools(out, false);
       return out;
     }
     const normalized = normalizeResponsesInput(out.input);
@@ -307,9 +282,11 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     delete out.reasoning_effort;
     out.stream = true;
     out.store = false;
-    ensureResponsesFingerprintTools(out);
     normalizeResponsesTools(out);
     sanitizeResponsesItems(out);
+    // Fingerprint last, mirroring the oc/* executor: append canonical
+    // read/shell and never default tool_choice to "none" (403 upstream).
+    applyFingerprintTools(out, true);
     return out;
   }
 }
