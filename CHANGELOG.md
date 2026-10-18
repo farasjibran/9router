@@ -1,3 +1,8 @@
+# Unreleased
+
+## Fixes
+- **OpenCode**: send `reasoning_effort` instead of the zai `thinking` object for `glm-5.3-flash-free` — OpenCode's inference service validates bodies strictly and answers `400 json: unknown field "thinking"` on both the free lane (`/inference/v1`) and Zen (`/zen/v1`)
+
 # v0.5.104 (2026-10-15)
 
 ## Features
