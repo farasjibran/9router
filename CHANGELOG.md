@@ -2,6 +2,7 @@
 
 ## Fixes
 - **OpenCode**: send `reasoning_effort` instead of the zai `thinking` object for `glm-5.3-flash-free` — OpenCode's inference service validates bodies strictly and answers `400 json: unknown field "thinking"` on both the free lane (`/inference/v1`) and Zen (`/zen/v1`)
+- **OpenCode Zen**: drop a level-less (`auto`) reasoning effort before it reaches OpenCode's inference service — its effort enum is `none|minimal|low|medium|high|xhigh|max`, so upstream answers `400 unknown variant 'auto'`; upstream now picks its own default
 
 # v0.5.104 (2026-10-15)
 

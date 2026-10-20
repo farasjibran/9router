@@ -263,6 +263,13 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     // Free-tier gate: upstream 403s stream:false even when everything else is valid.
     if (out && typeof out === "object") out.stream = true;
     if (!isResponsesModel(model || body?.model)) {
+      // OpenCode's inference service validates the effort enum strictly
+      // (none|minimal|low|medium|high|xhigh|max) and answers
+      // 400 "reasoning.effort: unknown variant 'auto'" otherwise. A thinking
+      // intent without a level (bare thinking.enabled, Claude adaptive)
+      // arrives here as "auto"; drop it so upstream picks its own default.
+      // Same rule as normalizeOpencodeReasoning in the oc/* executor.
+      if (out?.reasoning_effort === "auto") delete out.reasoning_effort;
       // Canonical read/shell fingerprint (same v2 gate as oc/*). The old
       // bash/glob/grep/read stubs are answered with 403 FreeTierError.
       applyFingerprintTools(out, false);
@@ -285,6 +292,8 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     }
     if (out.reasoning && typeof out.reasoning === "object" && !Array.isArray(out.reasoning)) {
       if (!out.reasoning.summary) out.reasoning.summary = "auto";
+      // Same strict enum as the chat lane: "auto" is not a valid effort here.
+      if (out.reasoning.effort === "auto") delete out.reasoning.effort;
     }
     delete out.reasoning_effort;
     out.stream = true;
