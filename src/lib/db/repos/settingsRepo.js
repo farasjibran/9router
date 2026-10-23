@@ -59,6 +59,9 @@ const DEFAULT_SETTINGS = {
   ponytailEnabled: false,
   ponytailLevel: "full",
   chinaFilterEnabled: false,
+  // User-authored system prompt, injected independently of the built-in savers.
+  customPromptEnabled: false,
+  customPrompt: "",
   pxpipeEnabled: false,
   pxpipeAutoInstall: true,
   pxpipeMinChars: 25000,
