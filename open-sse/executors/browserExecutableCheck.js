@@ -27,6 +27,10 @@ export function resolveSystemChromeExecutable() {
     env.NINEROUTER_BROWSER_BIN,
     env.CHROME_PATH,
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
     "/usr/bin/google-chrome",
     "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium",
@@ -36,6 +40,20 @@ export function resolveSystemChromeExecutable() {
     ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe")] : []),
   ];
   return candidates.find((candidate) => Boolean(candidate?.trim() && existsSync(candidate.trim()))) || null;
+}
+
+/**
+ * Playwright's own Chromium, when it has been installed via
+ * `npx playwright-core install chromium`. Returns null when the browser was
+ * never downloaded, so callers can fall back to a system Chrome.
+ */
+export function bundledChromiumPath(chromium) {
+  try {
+    const path = chromium?.executablePath?.();
+    return path && existsSync(path) ? path : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

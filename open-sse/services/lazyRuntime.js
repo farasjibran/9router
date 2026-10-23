@@ -15,6 +15,9 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { getWritableDataDir } from "../utils/writableDataDir.js";
 
+// Webpack ignore for dynamic require calls
+const webpackIgnore = (fn) => fn;
+
 // Keep in sync with package.json devDependencies.
 const LAZY_DEP_VERSIONS = {
   "playwright-core": "^1.62.1",
@@ -54,24 +57,33 @@ async function load(pkg) {
     if (!isModuleMissing(error)) throw error;
   }
   // 2) Already present in the runtime dir from a previous install.
-  const runtimeRequire = createRequire(path.join(getRuntimeDir(), "package.json"));
+  const runtimeDir = getRuntimeDir();
+  const runtimePackageJson = path.join(runtimeDir, "package.json");
+  let runtimeRequire;
   try {
-    return await import(pathToFileURL(runtimeRequire.resolve(pkg)).href);
+    runtimeRequire = webpackIgnore(() => createRequire(runtimePackageJson))();
   } catch (error) {
     if (!isModuleMissing(error)) throw error;
   }
+  if (runtimeRequire) {
+    try {
+      return await import(pathToFileURL(runtimeRequire.resolve(pkg)).href);
+    } catch (error) {
+      if (!isModuleMissing(error)) throw error;
+    }
+  }
   // 3) Download on demand, then import from the runtime dir.
   const version = LAZY_DEP_VERSIONS[pkg] || "latest";
-  const dir = getRuntimeDir();
   const res = await npmInstall(pkg, version);
   if (!res.ok) {
     const reason = (res.stderr.match(/npm ERR! ?(.+)/) || [])[1] || res.stderr.split("\n").filter(Boolean).pop() || "unknown npm error";
     throw new Error(
       `${pkg} is missing and the on-demand install failed (${String(reason).slice(0, 160)}) — ` +
-      `install it manually: cd "${dir}" && npm install ${pkg}@${version}`
+      `install it manually: cd "${runtimeDir}" && npm install ${pkg}@${version}`
     );
   }
-  return import(pathToFileURL(createRequire(path.join(dir, "package.json")).resolve(pkg)).href);
+  const finalRequire = webpackIgnore(() => createRequire(path.join(runtimeDir, "package.json")))();
+  return import(pathToFileURL(finalRequire.resolve(pkg)).href);
 }
 
 export function loadRuntimeDep(pkg) {

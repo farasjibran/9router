@@ -51,13 +51,22 @@ export const WEB_LOGIN_CONFIGS = {
     credentialFrom: "localStorageValue",
     validateToken: (value) => {
       if (typeof value !== "string" || !value.trim()) return false;
+      // DeepSeek writes {"value":"<token>","__version":"0"} while logged out the
+      // value is null — that placeholder is 30 chars long, so a length check
+      // alone would accept it and the harvest would capture the literal "null".
+      let token = value;
       try {
         const parsed = JSON.parse(value);
-        const token = typeof parsed?.value === "string" ? parsed.value : value;
-        return typeof token === "string" && token.length >= 20;
+        if (parsed && typeof parsed === "object" && "value" in parsed) {
+          if (typeof parsed.value !== "string") return false;
+          token = parsed.value;
+        }
       } catch {
-        return value.length >= 20;
+        // not JSON — a raw token
       }
+      token = token.trim();
+      if (!token || token === "null" || token === "undefined") return false;
+      return token.length >= 20;
     },
   },
   "uc-web": {

@@ -16,7 +16,7 @@ import { loadRuntimeDep } from "./lazyRuntime.js";
 import { getWebLoginConfig } from "./webLoginConfig.js";
 import { getWritableDataDir } from "../utils/writableDataDir.js";
 import { pruneProfileCaches, formatBytes } from "./browserProfileCache.js";
-import { resolveSystemChromeExecutable } from "../executors/browserExecutableCheck.js";
+import { resolveSystemChromeExecutable, bundledChromiumPath } from "../executors/browserExecutableCheck.js";
 
 const POLL_INTERVAL_MS = 1500;
 const LOGIN_TIMEOUT_MS = 300000;
@@ -190,7 +190,7 @@ async function launchLoginBrowser(chromium, dir, executablePath) {
 
 async function runLogin(session, config) {
   const { chromium } = await loadRuntimeDep("playwright-core");
-  const executablePath = resolveSystemChromeExecutable();
+  const executablePath = resolveSystemChromeExecutable() || bundledChromiumPath(chromium);
   if (!executablePath) {
     throw new Error("No Chrome/Chromium executable found — set CHROME_PATH or install Google Chrome");
   }

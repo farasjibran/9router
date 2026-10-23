@@ -2,6 +2,9 @@
 
 ## Fixes
 - **OpenCode Zen**: drop a level-less (`auto`) reasoning effort before it reaches OpenCode's inference service — its effort enum is `none|minimal|low|medium|high|xhigh|max`, so upstream answers `400 unknown variant 'auto'`; upstream now picks its own default
+- **Web Login**: detect Chrome Canary, Chromium, Edge and Brave on macOS when no system Chrome is installed, and fall back to Playwright's own Chromium — "Login via Browser" no longer fails with "No Chrome/Chromium executable found"
+- **DeepSeek Web**: reject the logged-out `userToken` placeholder (`{"value":null}`) during browser login instead of capturing it as a credential, which surfaced as a bogus "userToken is invalid or expired"
+- **Runtime**: keep the lazy Playwright/wreq-js installer working under webpack by ignoring the dynamic `createRequire` calls
 
 # v0.5.109 (2026-10-23)
 

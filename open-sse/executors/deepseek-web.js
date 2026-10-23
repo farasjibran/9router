@@ -67,10 +67,13 @@ function evictOldest(cache) {
 export function extractUserToken(credentials) {
   const raw = credentials?.apiKey || credentials?.accessToken;
   if (typeof raw !== "string" || raw.length === 0) return null;
-  // Handle JSON-wrapped tokens (DeepSeek stores token as {"value":"..."})
+  // Handle JSON-wrapped tokens (DeepSeek stores token as {"value":"..."}).
+  // Logged out it stores {"value":null,...} — that placeholder is not a token.
   try {
     const parsed = JSON.parse(raw);
-    if (typeof parsed?.value === "string") return parsed.value;
+    if (parsed && typeof parsed === "object" && "value" in parsed) {
+      return typeof parsed.value === "string" && parsed.value.trim() ? parsed.value : null;
+    }
   } catch {
     // not JSON, use raw
   }

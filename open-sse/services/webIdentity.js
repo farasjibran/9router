@@ -78,7 +78,14 @@ const PROBES = {
     let token = String(credential || "").trim();
     try {
       const parsed = JSON.parse(token);
-      if (typeof parsed?.value === "string") token = parsed.value;
+      // Logged out, DeepSeek stores {"value":null,"__version":"0"} — using the
+      // raw JSON string as the Bearer token would only produce a confusing 401.
+      if (parsed && typeof parsed === "object" && "value" in parsed) {
+        if (typeof parsed.value !== "string" || !parsed.value.trim()) {
+          return REJECTED("userToken is empty — log in to chat.deepseek.com first");
+        }
+        token = parsed.value;
+      }
     } catch { /* raw token */ }
     if (!token) return REJECTED("Missing userToken");
 
