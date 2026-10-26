@@ -178,6 +178,21 @@ export async function pollForToken(providerName, deviceCode, codeVerifier, extra
 
   const result = await provider.pollToken(provider.config, deviceCode, codeVerifier, extraData);
 
+  // Device-code providers answer "still waiting" as ok:false plus an error code
+  // (`authorization_pending` / `slow_down`), so this branch has to be reachable
+  // BEFORE the ok check. While it was nested under `if (result.ok)` every pending
+  // poll fell through to the final return at the bottom of this function, which
+  // drops `pending: true` — the OAuth modal then reported a hard failure on what
+  // was really just "the user has not approved yet".
+  if (!result.ok && (result.data?.error === "authorization_pending" || result.data?.error === "slow_down")) {
+    return {
+      success: false,
+      error: result.data.error,
+      errorDescription: result.data.error_description || result.data.message,
+      pending: result.data.error === "authorization_pending",
+    };
+  }
+
   if (result.ok) {
     // For device code flows, success is only when we have an access token
     if (result.data.access_token) {
