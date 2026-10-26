@@ -80,6 +80,12 @@ export class BaseExecutor {
     return body;
   }
 
+  // Overridable upstream fetch. Executors that need a different transport
+  // (e.g. a TLS-stack-sensitive free lane) override this instead of the loop.
+  async fetchUpstream(url, options, proxyOptions) {
+    return proxyAwareFetch(url, options, proxyOptions);
+  }
+
   shouldRetry(status, urlIndex) {
     return status === HTTP_STATUS.RATE_LIMITED && urlIndex + 1 < this.getFallbackCount();
   }
@@ -143,7 +149,7 @@ export class BaseExecutor {
         const bodyStr = JSON.stringify(transformedBody);
         const fetchT0 = Date.now();
         dbg("FETCH", `${this.provider.toUpperCase()} → ${url} | body=${bodyStr.length}B | connectTimeout=${timeoutMs}ms`);
-        const response = await proxyAwareFetch(url, {
+        const response = await this.fetchUpstream(url, {
           method: "POST",
           headers,
           body: bodyStr,

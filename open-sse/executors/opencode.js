@@ -7,6 +7,7 @@ import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import { fetchFreeLane } from "../utils/opencodeTransport.js";
 import { ANTHROPIC_API_VERSION } from "../providers/shared.js";
 import {
   normalizeResponsesInput,
@@ -406,6 +407,12 @@ export class OpenCodeExecutor extends BaseExecutor {
 
   async execute(args) {
     return super.execute({ ...args, credentials: this.prepareRequestCredentials(args) });
+  }
+
+  // The free-tier gate refuses Node's TLS stack with 429 FreeUsageLimitError
+  // while the same bytes pass through Bun. Replay through the Bun sidecar.
+  fetchUpstream(url, options, proxyOptions) {
+    return fetchFreeLane(url, options, proxyOptions, (u, o, p) => super.fetchUpstream(u, o, p));
   }
 
   // Free tier moved from /zen/v1 to /inference/v1 (OpenCode v2); /zen/v1 now

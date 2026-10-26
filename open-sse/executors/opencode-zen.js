@@ -4,6 +4,7 @@ import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel, isOpencodeFreeTierModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import { fetchFreeLane } from "../utils/opencodeTransport.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
@@ -240,6 +241,12 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
   async execute(args) {
     const credentials = this.prepareRequestCredentials(args);
     return super.execute({ ...args, credentials });
+  }
+
+  // *-free models share the oc/* free-tier gate, including its TLS check.
+  // Paid /zen/v1 traffic falls through to the normal fetch.
+  fetchUpstream(url, options, proxyOptions) {
+    return fetchFreeLane(url, options, proxyOptions, (u, o, p) => super.fetchUpstream(u, o, p));
   }
 
   buildHeaders(credentials, stream = true, url, model) {
