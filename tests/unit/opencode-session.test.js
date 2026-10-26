@@ -87,6 +87,28 @@ describe("OpenCode Free Session ID Format", () => {
     expect(counterOf(generateZenSessionId(1_700_000_000_000))).toBe(1);
   });
 
+  // Upstream also decodes the prefix timestamp and answers 429 when it is in
+  // the future or older than the free-tier window (~60d). A digest-derived
+  // time is effectively uniform over 2^36 ms, so most ids were rejected.
+  it("mints translated sessions with the current time", () => {
+    const PREFIX_MASK = (1n << 48n) - 1n;
+    const MOD = 2 ** 36;
+    const timeOf = (id) => Number((~BigInt(`0x${id.slice(4, 16)}`) & PREFIX_MASK) >> 12n);
+    const circularDistance = (a, b) => Math.min((a - b + MOD) % MOD, (b - a + MOD) % MOD);
+
+    const before = Date.now();
+    const after = Date.now();
+
+    for (const [translate, key] of [
+      [translateSessionId, "timestamp-regression"],
+      [translateZenSessionId, "zen-timestamp-regression"],
+    ]) {
+      const session = translate(key, "claude");
+      const decoded = timeOf(session);
+      expect(circularDistance(decoded, before % MOD)).toBeLessThanOrEqual(after - before + 1000);
+    }
+  });
+
   it("preserves already-valid OpenCode sessions without re-hashing", () => {
     const valid = "ses_f534dfae8ffeCy4Ee4tLWNygDc";
     expect(translateSessionId(valid)).toBe(valid);
@@ -183,16 +205,16 @@ describe("OpenCode Free User-Agent Validation", () => {
   it("defaults User-Agent to the v2 CLI form for non-opencode downstream clients", () => {
     const executor = getExecutor("opencode");
     const headersNoUa = executor.buildHeaders({});
-    expect(headersNoUa["User-Agent"]).toBe("opencode/latest/2.0.26/cli");
+    expect(headersNoUa["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
 
     const headersClaude = executor.buildHeaders({ rawHeaders: { "user-agent": "Claude-Code/1.0" } });
-    expect(headersClaude["User-Agent"]).toBe("opencode/latest/2.0.26/cli");
+    expect(headersClaude["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
   });
 
   it("replaces v1-style opencode User-Agents, which upstream now rejects with 403", () => {
     const executor = getExecutor("opencode");
     for (const ua of ["opencode", "opencode/1.15.0", "opencode/1.18.31 ai-sdk/provider-utils/4.0.40 runtime/bun/1.3.14"]) {
-      expect(executor.buildHeaders({ rawHeaders: { "user-agent": ua } })["User-Agent"]).toBe("opencode/latest/2.0.26/cli");
+      expect(executor.buildHeaders({ rawHeaders: { "user-agent": ua } })["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
     }
   });
 
@@ -324,5 +346,42 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
   it("declares forceStream on the opencode transport so chatCore serves SSE upstream", async () => {
     const { PROVIDERS } = await import("../../open-sse/config/providers.js");
     expect(PROVIDERS.opencode?.forceStream).toBe(true);
+  });
+});
+
+describe("OpenCode Zen free-tier fingerprint", () => {
+  it("appends the CLI <env> marker only for free-tier models", () => {
+    const executor = getExecutor("opencode-zen");
+
+    const free = executor.transformRequest("deepseek-v4.1-flash-free", {
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(free.messages[0].role).toBe("system");
+    expect(free.messages[0].content).toContain("<env>");
+    expect(free.tools.map((t) => t.function?.name)).toEqual(["read", "shell"]);
+
+    const paid = executor.transformRequest("deepseek-v4-flash", {
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(JSON.stringify(paid)).not.toContain("<env>");
+  });
+
+  it("appends the CLI <env> marker to Responses instructions for free-tier models", () => {
+    const executor = getExecutor("opencode-zen");
+    const transformed = executor.transformRequest("muse-spark-1.3-contributor-free", {
+      input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] }],
+    }, true, {});
+
+    expect(transformed.instructions).toContain("<env>");
+    expect(transformed.instructions).toContain("Working directory:");
+  });
+
+  it("keeps the marker off paid Responses requests", () => {
+    const executor = getExecutor("opencode-zen");
+    const transformed = executor.transformRequest("muse-spark-1.3", {
+      input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] }],
+    }, true, {});
+
+    expect(JSON.stringify(transformed)).not.toContain("<env>");
   });
 });
