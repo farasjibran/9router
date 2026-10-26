@@ -11,18 +11,29 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { getWritableDataDir } from "../utils/writableDataDir.js";
-
-// Webpack ignore for dynamic require calls
-const webpackIgnore = (fn) => fn;
 
 // Keep in sync with package.json devDependencies.
 const LAZY_DEP_VERSIONS = {
   "playwright-core": "^1.62.1",
   "wreq-js": "^3.2.0",
 };
+
+/**
+ * `createRequire` bound to `basePath`, fetched through a dynamic import.
+ *
+ * A static `import { createRequire } from "node:module"` is understood by
+ * webpack: it rewrites the resulting calls into `require(<expression>)`, which it
+ * cannot resolve at build time and can only report as "Critical dependency: the
+ * request of a dependency is an expression". Going through a runtime import
+ * keeps the call opaque to the bundler with identical runtime behaviour, so
+ * `next build` stays warning-free.
+ */
+async function createRequireFrom(basePath) {
+  const { createRequire } = await import(/* webpackIgnore: true */ "node:module");
+  return createRequire(basePath);
+}
 
 function getRuntimeDir() {
   return path.join(getWritableDataDir(), "runtime");
@@ -49,6 +60,18 @@ function npmInstall(pkg, version) {
 
 const inflight = new Map();
 
+/**
+ * Import an absolute file URL without letting webpack see the specifier.
+ *
+ * A plain `import(<expression>)` is rewritten into `__webpack_require__(...)`,
+ * which cannot resolve a path that only exists at runtime and is reported as
+ * "Critical dependency: the request of a dependency is an expression". It would
+ * also never reach the module actually installed in the runtime dir.
+ */
+async function importFromPath(fileUrl) {
+  return import(/* webpackIgnore: true */ fileUrl);
+}
+
 async function load(pkg) {
   // 1) Resolvable from the app install (dev machine / traced standalone).
   try {
@@ -61,13 +84,13 @@ async function load(pkg) {
   const runtimePackageJson = path.join(runtimeDir, "package.json");
   let runtimeRequire;
   try {
-    runtimeRequire = webpackIgnore(() => createRequire(runtimePackageJson))();
+    runtimeRequire = await createRequireFrom(runtimePackageJson);
   } catch (error) {
     if (!isModuleMissing(error)) throw error;
   }
   if (runtimeRequire) {
     try {
-      return await import(pathToFileURL(runtimeRequire.resolve(pkg)).href);
+      return await importFromPath(pathToFileURL(runtimeRequire.resolve(pkg)).href);
     } catch (error) {
       if (!isModuleMissing(error)) throw error;
     }
@@ -82,8 +105,8 @@ async function load(pkg) {
       `install it manually: cd "${runtimeDir}" && npm install ${pkg}@${version}`
     );
   }
-  const finalRequire = webpackIgnore(() => createRequire(path.join(runtimeDir, "package.json")))();
-  return import(pathToFileURL(finalRequire.resolve(pkg)).href);
+  const finalRequire = await createRequireFrom(path.join(runtimeDir, "package.json"));
+  return importFromPath(pathToFileURL(finalRequire.resolve(pkg)).href);
 }
 
 export function loadRuntimeDep(pkg) {
