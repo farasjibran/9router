@@ -34,10 +34,10 @@ describe("OpenCode Zen free-tier routing (same v2 gate as oc/*)", () => {
 describe("OpenCode Zen v2 headers", () => {
   it("defaults User-Agent to the v2 CLI form and replaces v1 UAs", () => {
     const executor = zenExecutor();
-    expect(executor.buildHeaders({})["User-Agent"]).toBe("opencode/latest/2.0.26/cli");
+    expect(executor.buildHeaders({})["User-Agent"]).toBe("opencode/latest/2.1.4/cli");
     expect(
       executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.18.31" } })["User-Agent"],
-    ).toBe("opencode/latest/2.0.26/cli");
+    ).toBe("opencode/latest/2.1.4/cli");
     expect(
       executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/latest/2.0.29/desktop" } })[
         "User-Agent"

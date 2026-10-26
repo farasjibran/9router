@@ -39,6 +39,18 @@ export const MEMORY_CONFIG = {
   proxyDispatchersMaxSize: 20,
 };
 
+// OpenCode's free-tier gate fingerprints the TLS stack, not just the request:
+// identical bytes get 429 FreeUsageLimitError from Node (OpenSSL/undici) and
+// 200 from Bun (BoringSSL). Replay the free lane through a loopback Bun
+// sidecar when Bun is available. Neither value is a secret.
+// Env: OPENCODE_TRANSPORT=off disables it; OPENCODE_BUN_BIN overrides the binary.
+export const OPENCODE_TRANSPORT_CONFIG = {
+  enabled: String(process.env.OPENCODE_TRANSPORT || "").toLowerCase() !== "off",
+  bunBin: process.env.OPENCODE_BUN_BIN || "bun",
+  startupTimeoutMs: envMs("OPENCODE_TRANSPORT_STARTUP_MS", 15 * 1000),
+  retryAfterFailureMs: envMs("OPENCODE_TRANSPORT_RETRY_MS", 5 * 60 * 1000),
+};
+
 // Parse a positive integer env override, falling back to a default.
 function envMs(name, def) {
   const raw = process.env[name];

@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
+import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel, isOpencodeFreeTierModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import { fetchFreeLane } from "../utils/opencodeTransport.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
@@ -19,7 +21,8 @@ const INFERENCE_RESPONSES_BASE_URL = "https://opencode.ai/inference/v1/responses
 const MAX_TOOL_NAME_LEN = 128;
 // OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
 // the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
-const OPENCODE_UA = "opencode/latest/2.0.26/cli";
+// Keep in step with the current CLI release (2.1.4, 2026-10-23).
+const OPENCODE_UA = "opencode/latest/2.1.4/cli";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
@@ -47,7 +50,6 @@ function unstableRandom() {
 // Upstream decodes it and rejects a non-small counter with 403 FreeTierError
 // (live probes: counter 0–16 pass, >=100 fail), so the counter must stay real.
 const SESSION_PREFIX_MASK = (1n << 48n) - 1n;
-const SESSION_TIME_MASK = (1n << 36n) - 1n;
 
 function descendingTimeHex(time, counterValue) {
   return (~(BigInt(time) * 0x1000n + BigInt(counterValue)) & SESSION_PREFIX_MASK)
@@ -70,22 +72,40 @@ export function generateRequestId(timestamp = Date.now()) {
   return `msg_${time}${unstableRandom()}`;
 }
 
+// Upstream decodes the prefix timestamp and rejects sessions whose time is in
+// the future or older than the free-tier window (live probes: -60d passes,
+// -100d and +30d answer 429). A digest-derived time is effectively random over
+// 2^36 ms, so most translated ids were rejected even though the format matched.
+// Mint with the current time and memoize per conversation/tool so a
+// conversation keeps one stable, valid session for the cached TTL.
+const translatedOpencodeSessions = new Map();
+const MAX_TRANSLATED_SESSIONS = 5000;
+const translatedSessionCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of translatedOpencodeSessions) {
+    if (now - entry.lastUsed > MEMORY_CONFIG.sessionTtlMs) {
+      translatedOpencodeSessions.delete(key);
+    }
+  }
+}, MEMORY_CONFIG.sessionCleanupIntervalMs);
+if (translatedSessionCleanup.unref) translatedSessionCleanup.unref();
+
 export function translateSessionId(sessionId, clientTool = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
-  const digest = crypto
-    .createHash("sha256")
-    .update(`opencode\0${clientTool || "generic"}\0${sessionId || ""}`)
-    .digest();
-  // Deterministic time field from the digest, counter pinned to 1 (what the CLI sends).
-  const time = BigInt(`0x${digest.subarray(0, 5).toString("hex")}`) & SESSION_TIME_MASK;
-  const timeHex = descendingTimeHex(time, 1);
-  let randomPart = "";
-  for (let i = 6; i < 20; i++) {
-    randomPart += BASE62_CHARS[digest[i] % 62];
+  const key = `${clientTool || "generic"}\0${sessionId || ""}`;
+  const existing = translatedOpencodeSessions.get(key);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    return existing.sessionId;
   }
-  return `ses_${timeHex}${randomPart}`;
+  const translated = `ses_${descendingTimeHex(Date.now(), 1)}${unstableRandom()}`;
+  if (translatedOpencodeSessions.size >= MAX_TRANSLATED_SESSIONS) {
+    translatedOpencodeSessions.delete(translatedOpencodeSessions.keys().next().value);
+  }
+  translatedOpencodeSessions.set(key, { sessionId: translated, lastUsed: Date.now() });
+  return translated;
 }
 
 function normalizeSession(value) {
@@ -223,6 +243,12 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     return super.execute({ ...args, credentials });
   }
 
+  // *-free models share the oc/* free-tier gate, including its TLS check.
+  // Paid /zen/v1 traffic falls through to the normal fetch.
+  fetchUpstream(url, options, proxyOptions) {
+    return fetchFreeLane(url, options, proxyOptions, (u, o, p) => super.fetchUpstream(u, o, p));
+  }
+
   buildHeaders(credentials, stream = true, url, model) {
     const headers = super.buildHeaders(credentials || {}, stream, url, model);
     const raw = credentials?.rawHeaders || {};
@@ -260,6 +286,9 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
 
   transformRequest(model, body, stream, credentials) {
     const out = super.transformRequest(model, body);
+    // Only the free-tier gate requires the CLI `<env>` marker; paid models keep
+    // their own system prompt untouched.
+    const freeTier = isFreeModel(model || body?.model);
     // Free-tier gate: upstream 403s stream:false even when everything else is valid.
     if (out && typeof out === "object") out.stream = true;
     if (!isResponsesModel(model || body?.model)) {
@@ -272,7 +301,7 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
       if (out?.reasoning_effort === "auto") delete out.reasoning_effort;
       // Canonical read/shell fingerprint (same v2 gate as oc/*). The old
       // bash/glob/grep/read stubs are answered with 403 FreeTierError.
-      applyFingerprintTools(out, false);
+      applyFingerprintTools(out, false, { env: freeTier });
       return out;
     }
     const normalized = normalizeResponsesInput(out.input);
@@ -302,7 +331,7 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
     sanitizeResponsesItems(out);
     // Fingerprint last, mirroring the oc/* executor: append canonical
     // read/shell and never default tool_choice to "none" (403 upstream).
-    applyFingerprintTools(out, true);
+    applyFingerprintTools(out, true, { env: freeTier });
     return out;
   }
 }
