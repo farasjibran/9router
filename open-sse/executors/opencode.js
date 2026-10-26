@@ -7,7 +7,9 @@ import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import { dbg } from "../utils/debugLog.js";
 import { fetchFreeLane } from "../utils/opencodeTransport.js";
+import { opencodeTlsFetch, OpencodeTlsUnavailableError } from "../services/opencodeTlsClient.js";
 import { ANTHROPIC_API_VERSION } from "../providers/shared.js";
 import {
   normalizeResponsesInput,
@@ -405,12 +407,32 @@ export class OpenCodeExecutor extends BaseExecutor {
     return injectReasoningContent({ provider: this.provider, model, body });
   }
 
+  // The free gate keys on the TLS ClientHello, so a native Node fetch is refused
+  // no matter how faithful the body is. Route the direct path through the
+  // impersonating client and keep proxy handling where it already is
+  // (proxyAwareFetch delegates to `directFetch` only when no proxy is set).
+  // Fail-open: without wreq-js the request still leaves on native fetch, so the
+  // Bun sidecar replay below can still rescue it instead of erroring here.
   async execute(args) {
-    return super.execute({ ...args, credentials: this.prepareRequestCredentials(args) });
+    const credentials = this.prepareRequestCredentials(args);
+    return super.execute({
+      ...args,
+      credentials,
+      directFetch: (url, options) => opencodeTlsFetch(url, {
+        method: options.method,
+        headers: options.headers,
+        body: options.body,
+      }, { signal: options.signal }).catch((error) => {
+        if (!(error instanceof OpencodeTlsUnavailableError)) throw error;
+        dbg("OPENCODE", `TLS client unavailable, using native fetch: ${error.message}`);
+        return fetch(url, options);
+      }),
+    });
   }
 
-  // The free-tier gate refuses Node's TLS stack with 429 FreeUsageLimitError
-  // while the same bytes pass through Bun. Replay through the Bun sidecar.
+  // Second line of defence: the gate refuses Node's TLS stack with 429
+  // FreeUsageLimitError while the same bytes pass through Bun, so a free-lane
+  // rejection is replayed through the Bun sidecar (fail-open when Bun is absent).
   fetchUpstream(url, options, proxyOptions) {
     return fetchFreeLane(url, options, proxyOptions, (u, o, p) => super.fetchUpstream(u, o, p));
   }
