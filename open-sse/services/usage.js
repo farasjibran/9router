@@ -23,6 +23,7 @@ import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo.js";
 import { getCursorUsage } from "./usage/cursor.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
 import { getGlmUsage } from "./usage/glm.js";
+import { getTokenHarborUsage } from "./usage/tokenharbor.js";
 import { getCommandCodeUsage } from "./usage/commandcode.js";
 import {
   getIflowUsage,
@@ -69,6 +70,14 @@ const USAGE_HANDLERS = {
   "xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   commandcode: (c) => getCommandCodeUsage(c.apiKey, c.proxyOptions),
   cursor: (c) => getCursorUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+  // No quota endpoint for API keys — usage is captured from live responses and
+  // re-probed on an explicit refresh (force), which spends one :free request.
+  tokenharbor: (c) =>
+    getTokenHarborUsage(c.apiKey, c.proxyOptions, {
+      force: c.force,
+      connectionId: c.connectionId,
+      providerSpecificData: c.providerSpecificData,
+    }),
 };
 
 // Qoder intl/CN share one usage path: PATs must be exchanged to a job token
@@ -80,7 +89,7 @@ async function getQoderUsageFor(c) {
 }
 
 export async function getUsageForProvider(connection, proxyOptions = null, options = {}) {
-  const { provider, accessToken, apiKey, providerSpecificData, projectId } = connection;
+  const { id: connectionId, provider, accessToken, apiKey, providerSpecificData, projectId } = connection;
   const providerDataWithProjectId = {
     ...(providerSpecificData || {}),
     ...(projectId ? { projectId } : {}),
@@ -90,6 +99,7 @@ export async function getUsageForProvider(connection, proxyOptions = null, optio
   if (!handler) return { message: `Usage API not implemented for ${provider}` };
   return await handler({
     provider,
+    connectionId,
     accessToken,
     apiKey,
     providerSpecificData,

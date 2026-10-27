@@ -10,6 +10,7 @@ import { getModelTargetFormat, getModelSupportedFormats, getModelStrip, getModel
 import { PROVIDERS } from "../config/providers.js";
 import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.js";
 import { upstreamResponseHeaders } from "../utils/upstreamHeaders.js";
+import { captureQuotaFromResponse } from "../services/usage/capture.js";
 import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.js";
 import { handleBypassRequest } from "../utils/bypassHandler.js";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
@@ -418,6 +419,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     providerHeaders = result.headers;
     finalBody = result.transformedBody;
     providerResponseFormat = result.responseFormat || targetFormat;
+    // Providers with no pullable quota endpoint stamp quota onto their own
+    // responses; capture it off the live one. Detached and best-effort.
+    captureQuotaFromResponse({ provider, connectionId, response: providerResponse });
     const renamedToolNames = takeRenamedToolNames(translatedBody);
     if (renamedToolNames?.size) {
       toolNameMap = new Map([...(toolNameMap || []), ...renamedToolNames]);
