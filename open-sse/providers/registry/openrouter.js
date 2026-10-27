@@ -10,7 +10,7 @@ export default {
     textIcon: "OR",
     website: "https://openrouter.ai",
     notice: {
-      text: "Free tier: 27+ free models, no credit card needed, 200 req/day. After  0 credit: 1,000 req/day.",
+      text: "Free tier: ~20 :free chat models, no credit card needed. 50 free-model requests/day (20 RPM); 1,000/day after a one-time 10-credit top-up. Free variants are rate-limited and rotate without notice.",
       apiKeyUrl: "https://openrouter.ai/settings/keys",
     },
   },
@@ -26,6 +26,26 @@ export default {
     },
   },
   models: [
+    // ── Chat (:free) — snapshot of the zero-price catalogue, verified against
+    // https://openrouter.ai/api/v1/models. Roster rotates; modelsFetcher below
+    // re-reads the live list and passthroughModels accepts anything newer.
+    { id: "openrouter/free", name: "Free Models Router (auto)", contextLength: 200000 },
+    { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra 550B (Free)", contextLength: 1000000 },
+    { id: "nvidia/nemotron-3.5-super-vl:free", name: "Nemotron 3.5 Super VL (Free)", contextLength: 1000000 },
+    { id: "nvidia/nemotron-3.5-lightning:free", name: "Nemotron 3.5 Lightning (Free)", contextLength: 1000000 },
+    { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", name: "Nemotron 3 Nano Omni 30B (Free)", contextLength: 256000 },
+    { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nemotron 3 Super 120B (Free)", contextLength: 262144 },
+    { id: "thinkingmachines/inkling:free", name: "Inkling (Free)", contextLength: 1048576 },
+    { id: "thinkingmachines/inkling-small:free", name: "Inkling Small (Free)", contextLength: 1048576 },
+    { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (Free)", contextLength: 262144 },
+    { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B (Free)", contextLength: 262144 },
+    { id: "dots-studio/dots-3-note-preview:free", name: "Dots 3 Note Preview (Free)", contextLength: 512000 },
+    { id: "xingchen-agi/xing4.0-29b-a4b:free", name: "Xing4.0 29B A4B (Free)", contextLength: 262144 },
+    { id: "poolside/laguna-s-2.1:free", name: "Laguna S 2.1 (Free)", contextLength: 262144 },
+    { id: "poolside/laguna-xs-2.1:free", name: "Laguna XS 2.1 (Free)", contextLength: 262144 },
+    { id: "cohere/north-mini-code:free", name: "North Mini Code (Free)", contextLength: 256000 },
+    { id: "recursive/flint-v1.0:free", name: "Flint v1.0 (Free)", contextLength: 262144 },
+    // ── Embeddings
     { id: "openai/text-embedding-3-large", name: "OpenAI Text Embedding 3 Large", kind: "embedding" },
     { id: "openai/text-embedding-3-small", name: "OpenAI Text Embedding 3 Small", kind: "embedding" },
     { id: "openai/text-embedding-ada-002", name: "OpenAI Text Embedding Ada 002", kind: "embedding" },

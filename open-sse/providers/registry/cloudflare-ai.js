@@ -14,7 +14,7 @@ export default {
     textIcon: "CF",
     website: "https://developers.cloudflare.com/workers-ai/",
     notice: {
-      text: "Workers AI free tier. Requires a Cloudflare API token and Account ID.",
+      text: "Workers AI free tier: 10,000 Neurons/day, resetting 00:00 UTC. On the Workers Free plan requests hard-fail once the allocation is spent; some frontier models require a paid billing method. Needs a Cloudflare API token with Workers AI access plus your Account ID.",
       apiKeyUrl: "https://dash.cloudflare.com/profile/api-tokens",
     },
   },

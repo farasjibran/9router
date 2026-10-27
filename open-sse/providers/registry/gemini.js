@@ -12,6 +12,7 @@ export default {
     textIcon: "GE",
     website: "https://ai.google.dev",
     notice: {
+      text: "Free tier via Google AI Studio — no credit card required. Free input & output tokens on a limited model set, with per-model RPM/TPM/RPD caps shown in AI Studio. Free-tier prompts may be used to improve Google products; rate limits are not published as fixed numbers.",
       apiKeyUrl: "https://aistudio.google.com/app/apikey",
     },
   },
@@ -66,6 +67,11 @@ export default {
     { id: "embedding-001", name: "Embedding 001", dimensions: 768, kind: "embedding" },
   ],
   serviceKinds: ["llm","embedding","image","imageToText","webSearch","tts","stt"],
+  // Live catalogue: GET /v1beta/models returns { models: [{ name: "models/x", ... }] }.
+  // The generic "openai" filter unwraps `data`/`models` and reads `id`, so map
+  // `name` -> `id` here to keep the "models/" prefix out of the model id.
+  modelsFetcher: { url: "https://generativelanguage.googleapis.com/v1beta/models", type: "gemini" },
+  passthroughModels: true,
   ttsConfig: {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
     authType: "apikey",

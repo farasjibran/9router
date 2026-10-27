@@ -7,6 +7,42 @@ const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 const DEAD_FREE_OPENCODE_MODELS = new Set(["deepseek-v4-flash-free"]);
 
 export const FILTERS = {
+  // Generic OpenAI-shaped /v1/models catalogue: { data: [{ id, name?, context_length? }] }.
+  // Used by groq, tokenrouter, tokenharbor, venice, dahl, bai, perplexity-agent and
+  // vercel-ai-gateway. Without this entry the route returned 400 "Unknown filter
+  // type" and the provider silently showed no suggested models.
+  openai: (models) =>
+    (Array.isArray(models) ? models : [])
+      .filter((m) => typeof m?.id === "string" && m.id.trim() !== "")
+      .map((m) => ({
+        id: m.id,
+        name: m.name || m.id,
+        contextLength: Number(m.context_length ?? m.contextLength ?? m.limit?.context) || undefined,
+      }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
+
+  // Gemini returns { models: [{ name: "models/gemini-3.8-flash", displayName, ... }] }.
+  // Strip the "models/" prefix and keep only ids that support generateContent
+  // (skips embedding/tts-only entries that would fail a chat call).
+  gemini: (models) =>
+    (Array.isArray(models) ? models : [])
+      .filter((m) => typeof m?.name === "string")
+      .filter((m) => !Array.isArray(m.supportedGenerationMethods) || m.supportedGenerationMethods.includes("generateContent"))
+      .map((m) => ({
+        id: m.name.replace(/^models\//, ""),
+        name: m.displayName || m.name.replace(/^models\//, ""),
+        contextLength: Number(m.inputTokenLimit) || undefined,
+      }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
+
+  // Pollinations Classic returns a bare array of model descriptors:
+  // [{ name: "openai-fast", description, tier: "anonymous", aliases: [...] }].
+  // Only the anonymous tier is reachable without a Pollen key.
+  "pollinations-free": (models) =>
+    (Array.isArray(models) ? models : [])
+      .filter((m) => typeof m?.name === "string" && (!m.tier || m.tier === "anonymous"))
+      .map((m) => ({ id: m.name, name: m.description || m.name })),
+
   "openrouter-free": (models) =>
     models
       .filter(

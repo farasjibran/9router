@@ -24,14 +24,19 @@ export default {
       url: "https://api.groq.com/openai/v1/models",
     },
   },
+  modelsFetcher: { url: "https://api.groq.com/openai/v1/models", type: "openai" },
   models: [
-    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-    { id: "meta-llama/llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick" },
-    { id: "qwen/qwen3-32b", name: "Qwen3 32B" },
-    { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B" },
+    // Snapshot of https://api.groq.com/openai/v1/models (verified live). Groq
+    // decommissions models aggressively — the previous list still declared
+    // llama-3.3-70b-versatile, llama-4-maverick, qwen3-32b and
+    // distil-whisper-large-v3-en, all of which now return 404 / decommissioned.
+    { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", contextLength: 131072 },
+    { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", contextLength: 131072 },
+    { id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B", contextLength: 131072 },
+    { id: "allam-2-7b", name: "ALLaM 2 7B", contextLength: 4096 },
+    { id: "openai/gpt-oss-safeguard-20b", name: "GPT-OSS Safeguard 20B", contextLength: 131072 },
     { id: "whisper-large-v3", name: "Whisper Large v3", params: ["language","response_format","temperature","prompt"], kind: "stt" },
     { id: "whisper-large-v3-turbo", name: "Whisper Large v3 Turbo", params: ["language","response_format","temperature","prompt"], kind: "stt" },
-    { id: "distil-whisper-large-v3-en", name: "Distil Whisper Large v3 EN", params: ["language","response_format","temperature","prompt"], kind: "stt" },
   ],
   serviceKinds: ["llm","imageToText","stt"],
   sttConfig: {
