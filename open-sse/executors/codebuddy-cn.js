@@ -1,4 +1,5 @@
 import { DefaultExecutor } from "./default.js";
+import { isInjectedSystemPrompt } from "../rtk/systemInject.js";
 
 /**
  * CodeBuddyExecutor — talks to https://copilot.tencent.com/v2/chat/completions
@@ -25,6 +26,13 @@ export class CodeBuddyExecutor extends DefaultExecutor {
     // legitimate user system prompts untouched. content may be a string or typed
     // blocks ([{type:"text",text}]) depending on the incoming client format, so
     // flatten before matching and preserve the original shape on replacement.
+    //
+    // The decision is made per `\n\n` segment, not on the whole message: token
+    // savers (caveman, ponytail), the China Filter and the user's custom prompt
+    // are appended as trailing segments, so replacing the message wholesale threw
+    // away every one of them whenever the client's own prompt tripped the filter.
+    // Injected segments are recognised by identity (isInjectedSystemPrompt) and
+    // always survive, so a filter rule can never be silently dropped.
     const NEUTRAL_PROMPT = "You are a helpful AI assistant that helps with software engineering tasks.";
     const AGENT_PATTERN = /you are claude code|claude.?code.+official.+cli|anthropic.+official.+cli|anxthxropic.+official.+cli|you are (?:cursor|windsurf|cline|aider|continue|copilot|cody)|you are an? (?:ai )?(?:coding |code )?agent|cc_entrypoint\s*=\s*(?:cli|vscode|jetbrains|gui)|claude.?code.+issues|give feedback.+claude.?code|you are .{0,30}(?:powerful )?ai agent|orchestration capabilities|OhMyOpenCode|<agent-identity>|<Role>|<Behavior_Instructions>/i;
     const flatten = (content) =>
@@ -38,12 +46,17 @@ export class CodeBuddyExecutor extends DefaultExecutor {
         if (!message || message.role !== "system") return message;
         const text = flatten(message.content);
         if (!text) return message;
-        if (text.length > 2000 || AGENT_PATTERN.test(text)) {
-          return typeof message.content === "string"
-            ? { ...message, content: NEUTRAL_PROMPT }
-            : { ...message, content: [{ type: "text", text: NEUTRAL_PROMPT }] };
-        }
-        return message;
+        const kept = text
+          .split("\n\n")
+          .filter((segment) => segment.trim())
+          .filter((segment) => isInjectedSystemPrompt(segment.trim())
+            || (segment.length <= 2000 && !AGENT_PATTERN.test(segment)));
+        // Nothing legitimate left → fall back to the neutral prompt the filter accepts.
+        const next = kept.length ? kept.join("\n\n") : NEUTRAL_PROMPT;
+        if (next === text) return message;
+        return typeof message.content === "string"
+          ? { ...message, content: next }
+          : { ...message, content: [{ type: "text", text: next }] };
       });
     }
 

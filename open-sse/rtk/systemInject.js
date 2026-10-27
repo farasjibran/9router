@@ -8,10 +8,22 @@ import { ROLE } from "../translator/schema/roles.js";
 
 const SEP = "\n\n";
 
+// Prompt texts appended by the token savers / China Filter / custom prompt.
+// Recorded so downstream executors can tell an injected instruction apart from
+// the client's own system text — some providers rewrite or drop system messages
+// wholesale, and an injected rule must survive that rewrite.
+const injectedPrompts = new Set();
+
+/** True when `text` is exactly a prompt this injector appended. */
+export function isInjectedSystemPrompt(text) {
+  return typeof text === "string" && injectedPrompts.has(text);
+}
+
 export function injectSystemPrompt(body, format, prompt) {
   try {
     if (!body || !prompt) return;
     if (typeof body !== "object") return;
+    if (typeof prompt === "string") injectedPrompts.add(prompt);
 
     // Kiro's GenerateAssistantResponse schema does not accept the generic
     // systemPrompt field; its prompt is assembled by the Kiro translator.

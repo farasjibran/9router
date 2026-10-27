@@ -139,6 +139,24 @@ export function withConversationHeaders(headers, body = null) {
   return headers;
 }
 
+// The gateway requires the first turn to be a system prompt. This is the
+// baseline identity the official IDE sends; client system text is appended.
+const CODEBUDDY_DEFAULT_SYSTEM_PROMPT = "You are CodeBuddy Code.";
+
+// Flatten a system message's content into plain text. The incoming shape varies
+// by client format: a bare string, or typed blocks such as
+// [{ type: "text", text }] / [{ type: "input_text", text }].
+function flattenContent(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => (block && typeof block.text === "string" ? block.text : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
 export class CodeBuddyIntlExecutor extends DefaultExecutor {
   constructor() {
     super("codebuddy-intl");
@@ -157,16 +175,30 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
 
     // CodeBuddy rejects plain OpenAI shape (11101 invalid request): needs a
     // leading system prompt + user content as typed blocks, not a bare string.
+    //
+    // The gateway accepts only ONE leading system turn, so the client's own
+    // system/developer text is folded into that turn instead of being dropped.
+    // Dropping it silently discarded every system-level instruction — RTK
+    // savers (caveman, ponytail), the China Filter and the user's custom prompt
+    // all arrive as system messages, so the gateway used to see none of them.
     const source = Array.isArray(transformed.messages) ? transformed.messages : [];
-    transformed.messages = [{ role: "system", content: "You are CodeBuddy Code." }];
+    const systemParts = [];
+    const rest = [];
     for (const message of source) {
-      if (!message || typeof message !== "object" || ["system", "developer"].includes(message.role)) continue;
+      if (!message || typeof message !== "object") continue;
+      if (["system", "developer"].includes(message.role)) {
+        const text = flattenContent(message.content);
+        if (text) systemParts.push(text);
+        continue;
+      }
       if (message.role === "user" && typeof message.content === "string") {
-        transformed.messages.push({ ...message, content: [{ type: "text", text: message.content }] });
+        rest.push({ ...message, content: [{ type: "text", text: message.content }] });
       } else {
-        transformed.messages.push({ ...message });
+        rest.push({ ...message });
       }
     }
+    const systemText = [CODEBUDDY_DEFAULT_SYSTEM_PROMPT, ...systemParts].join("\n\n");
+    transformed.messages = [{ role: "system", content: systemText }, ...rest];
 
     // Preserve session identifiers that the gateway may require in the request body
     // (session_id / prompt_cache_key / conversation_id). These are used by the
