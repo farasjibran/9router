@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/shared/components";
+import { useVisibilityInterval } from "@/shared/hooks";
 import { useNotificationStore } from "@/store/notificationStore";
 
 const STATUS_CONFIG = {
@@ -40,11 +41,8 @@ export default function ModelAvailabilityBadge() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+  // Poll availability only while the tab is visible.
+  useVisibilityInterval(fetchStatus, 30000);
 
   // Close popover on outside click
   useEffect(() => {

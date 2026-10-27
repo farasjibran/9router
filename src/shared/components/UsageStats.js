@@ -29,15 +29,35 @@ function timeAgo(timestamp) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// Auto-update time display every second without re-rendering parent
+// Auto-update relative timestamps. A single shared ticker drives every row —
+// previously each <TimeAgo> mounted its own 1s interval, so a 20-row table ran
+// 20 timers and 20 independent re-renders every second.
+const timeAgoSubscribers = new Set();
+let timeAgoTimer = null;
+
+function subscribeTimeAgo(fn) {
+  timeAgoSubscribers.add(fn);
+  if (!timeAgoTimer) {
+    timeAgoTimer = setInterval(() => {
+      // Pause entirely while the tab is hidden.
+      if (typeof document !== "undefined" && document.hidden) return;
+      timeAgoSubscribers.forEach((cb) => cb());
+    }, 1000);
+  }
+  return () => {
+    timeAgoSubscribers.delete(fn);
+    if (timeAgoSubscribers.size === 0 && timeAgoTimer) {
+      clearInterval(timeAgoTimer);
+      timeAgoTimer = null;
+    }
+  };
+}
+
 function TimeAgo({ timestamp }) {
   const [, setTick] = useState(0);
-  
-  useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  
+
+  useEffect(() => subscribeTimeAgo(() => setTick((t) => t + 1)), []);
+
   return <>{timeAgo(timestamp)}</>;
 }
 
@@ -280,33 +300,58 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
       });
   }, [period]);
 
-  // SSE connection - real-time updates for activeRequests + recentRequests only
+  // SSE connection - real-time updates for activeRequests + recentRequests only.
+  // Closed while the tab is hidden and reopened on focus, so a background tab
+  // does not hold a stream open (server recomputes stats per connected client).
   useEffect(() => {
-    const es = new EventSource("/api/usage/stream");
+    let es = null;
 
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        // Always merge only real-time fields, never overwrite full stats from REST
-        setStats((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            activeRequests: data.activeRequests,
-            recentRequests: data.recentRequests,
-            errorProvider: data.errorProvider,
-            pending: data.pending,
-          };
-        });
-        if (hasLoadedStats.current) setLoading(false);
-      } catch (err) {
-        console.error("[SSE CLIENT] parse error:", err);
+    const connect = () => {
+      if (es) return;
+      es = new EventSource("/api/usage/stream");
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          // Always merge only real-time fields, never overwrite full stats from REST
+          setStats((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              activeRequests: data.activeRequests,
+              recentRequests: data.recentRequests,
+              errorProvider: data.errorProvider,
+              pending: data.pending,
+            };
+          });
+          if (hasLoadedStats.current) setLoading(false);
+        } catch (err) {
+          console.error("[SSE CLIENT] parse error:", err);
+        }
+      };
+
+      es.onerror = () => setLoading(false);
+    };
+
+    const disconnect = () => {
+      if (es) {
+        es.close();
+        es = null;
       }
     };
 
-    es.onerror = () => setLoading(false);
+    const onVisibilityChange = () => {
+      if (document.hidden) disconnect();
+      else connect();
+    };
 
-    return () => es.close();
+    if (!document.hidden) connect();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      disconnect();
+    };
   }, []);
 
   const toggleSort = useCallback((tableType, field) => {

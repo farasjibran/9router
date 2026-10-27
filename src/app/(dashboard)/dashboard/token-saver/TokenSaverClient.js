@@ -221,6 +221,7 @@ export default function TokenSaverClient() {
     setInstallLog("");
     if (logPollRef.current) clearInterval(logPollRef.current);
     const tick = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
         const r = await fetch("/api/headroom/extras?log=1", {
           headers: { "Cache-Control": "no-store" },

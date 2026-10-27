@@ -1,29 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Card from "./Card";
+import { useVisibilityInterval } from "@/shared/hooks";
 
 export default function RequestLogger() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  useEffect(() => {
-    let interval;
-    if (autoRefresh) {
-      interval = setInterval(() => {
-        fetchLogs(false);
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
-
-  const fetchLogs = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchLogs = useCallback(async () => {
     try {
       const res = await fetch("/api/usage/request-logs");
       if (res.ok) {
@@ -33,9 +19,14 @@ export default function RequestLogger() {
     } catch (error) {
       console.error("Failed to fetch logs:", error);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
     }
-  };
+  }, []);
+
+  // Single code path: initial load + background poll. `loading` starts true so
+  // the skeleton shows until the first response. Polls only while the tab is
+  // visible — a hidden dashboard tab has no reason to hit this every 3s.
+  useVisibilityInterval(fetchLogs, autoRefresh ? 3000 : null);
 
   return (
     <div className="flex flex-col gap-4">
