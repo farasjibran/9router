@@ -215,6 +215,12 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
 
   buildHeaders(credentials, stream, url, model, body) {
     const headers = super.buildHeaders(credentials, stream, url, model, body);
+    // The base `codebuddyHeaders` hook mints a per-request conversation id.
+    // This executor derives one from the session key instead, so retries of a
+    // turn and later turns of one conversation reuse the same id. Drop the
+    // hook's value first — withConversationHeaders preserves what it finds.
+    const hookKey = Object.keys(headers).find((k) => k.toLowerCase() === "x-conversation-id");
+    if (hookKey) delete headers[hookKey];
     // Fails closed: buildHeaders runs OUTSIDE the fetch try/catch in base.js.
     // An unexpected error surfaces as a generic 502 with no cause.
     // A silent fall-through to "send without the family" would be worse:
