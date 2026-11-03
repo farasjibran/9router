@@ -231,17 +231,12 @@ function injectClaudeSystem(body, prompt) {
     }
     if (Array.isArray(sys)) {
       try { if (sys.some(b => b && b.text === prompt)) return; } catch (_) {}
-      const block = { type: CLAUDE_BLOCK.TEXT, text: prompt };
-      let lastCacheIdx = -1;
-      try {
-        for (let i = sys.length - 1; i >= 0; i--) {
-          if (sys[i]?.cache_control) { lastCacheIdx = i; break; }
-        }
-      } catch (_) {}
-      try {
-        if (lastCacheIdx >= 0) sys.splice(lastCacheIdx, 0, block);
-        else sys.push(block);
-      } catch (_) {}
+      // Append last, never before the cached block. Anthropic reads the system
+      // array in order, so an instruction spliced ahead of a long client prompt
+      // is outweighed by whatever that prompt says afterwards — that is how the
+      // China Filter rule got ignored on claude-format targets (MiniMax Code).
+      // Appending also keeps the cached prefix byte-stable across retries.
+      try { sys.push({ type: CLAUDE_BLOCK.TEXT, text: prompt }); } catch (_) {}
       return;
     }
     // absent/null

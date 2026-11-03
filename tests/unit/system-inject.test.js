@@ -183,13 +183,16 @@ describe("system-inject claude", () => {
     expect(body.system).toBe(`base${SEP}${P1}${SEP}${P2}`);
   });
 
-  it("array system uses CLAUDE_BLOCK.TEXT and inserts before last cache_control", () => {
+  it("array system appends last, after any cache_control block", () => {
     const body = { system: [{ type: CLAUDE_BLOCK.TEXT, text: "a" }, { type: CLAUDE_BLOCK.TEXT, text: "b", cache_control: { type: "ephemeral" } }, { type: CLAUDE_BLOCK.TEXT, text: "c", cache_control: { type: "ephemeral" } }] };
     injectSystemPrompt(body, FORMATS.CLAUDE, P1);
-    // should be inserted before last cache_control (index 2)
-    expect(body.system[2]).toEqual({ type: CLAUDE_BLOCK.TEXT, text: P1 });
-    expect(body.system[3].text).toBe("c");
-    expect(body.system[3].cache_control).toBeDefined();
+    // The instruction must be the last thing the model reads, and the client's
+    // cached prefix must stay untouched.
+    expect(body.system[body.system.length - 1]).toEqual({ type: CLAUDE_BLOCK.TEXT, text: P1 });
+    expect(body.system[1].text).toBe("b");
+    expect(body.system[1].cache_control).toBeDefined();
+    expect(body.system[2].text).toBe("c");
+    expect(body.system[2].cache_control).toBeDefined();
   });
 
   it("array without cache_control appends", () => {
