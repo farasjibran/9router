@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { DefaultExecutor } from "./default.js";
+import { isInjectedSystemPrompt } from "../rtk/systemInject.js";
 
 /**
  * CodeBuddyIntlExecutor — talks to https://www.codebuddy.ai/v2/chat/completions
@@ -173,6 +174,12 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
       transformed.reasoning_summary = "auto";
     }
 
+    // Tencent WAF flags third-party CLI agent identity strings (Claude Code, Cursor, etc.)
+    // as unauthorized tooling / prompt injection and rejects/bans the account.
+    // Neutralize only matching agent markers while preserving user system prompts.
+    const NEUTRAL_PROMPT = "You are a helpful AI assistant that helps with software engineering tasks.";
+    const AGENT_PATTERN = /you are claude code|claude.?code.+official.+cli|anthropic.+official.+cli|anxthxropic.+official.+cli|you are (?:cursor|windsurf|cline|aider|continue|copilot|cody)|you are an? (?:ai )?(?:coding |code )?agent|cc_entrypoint\s*=\s*(?:cli|vscode|jetbrains|gui)|claude.?code.+issues|give feedback.+claude.?code|you are .{0,30}(?:powerful )?ai agent|orchestration capabilities|OhMyOpenCode|<agent-identity>|<Role>|<Behavior_Instructions>/i;
+
     // CodeBuddy rejects plain OpenAI shape (11101 invalid request): needs a
     // leading system prompt + user content as typed blocks, not a bare string.
     //
@@ -197,7 +204,23 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
         rest.push({ ...message });
       }
     }
-    const systemText = [CODEBUDDY_DEFAULT_SYSTEM_PROMPT, ...systemParts].join("\n\n");
+    // The filter decision is made per `\n\n` segment, not per message: token
+    // savers (caveman, ponytail), the China Filter and the user's custom prompt
+    // are appended as trailing segments, so replacing a message wholesale threw
+    // away every one of them whenever the client's own prompt tripped the
+    // filter. Injected segments are recognised by identity
+    // (isInjectedSystemPrompt) and always survive.
+    const clientSystemText = systemParts.join("\n\n");
+    const sanitized = clientSystemText
+      .split("\n\n")
+      .filter((segment) => segment.trim())
+      .filter((segment) => isInjectedSystemPrompt(segment.trim())
+        || (segment.length <= 2000 && !AGENT_PATTERN.test(segment)))
+      .join("\n\n");
+    // Nothing legitimate left → fall back to the neutral prompt the filter
+    // accepts; a request with no client system turn keeps the CodeBuddy identity.
+    const systemText =
+      sanitized || (clientSystemText ? NEUTRAL_PROMPT : CODEBUDDY_DEFAULT_SYSTEM_PROMPT);
     transformed.messages = [{ role: "system", content: systemText }, ...rest];
 
     // Preserve session identifiers that the gateway may require in the request body

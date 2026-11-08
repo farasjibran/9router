@@ -1451,6 +1451,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > perplexity-agent →
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > pollinations → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > poolside → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -1773,6 +1792,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > zed → headers (api
     "Authorization": "<CRED>",
     "Content-Type": "application/json",
     "content-type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > zro → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
   },
 }
 `;
@@ -2232,6 +2270,13 @@ exports[`GOLDEN buildUrl (default executor providers) > perplexity-agent → url
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > pollinations → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://text.pollinations.ai/openai",
+  "stream": "https://text.pollinations.ai/openai",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > poolside → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://inference.poolside.ai/v1/chat/completions",
@@ -2348,5 +2393,12 @@ exports[`GOLDEN buildUrl (default executor providers) > zed → url (stream + no
 {
   "nonStream": "https://cloud.zed.dev/completions",
   "stream": "https://cloud.zed.dev/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > zro → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://zro.moonmath.ai/v1/chat/completions",
+  "stream": "https://zro.moonmath.ai/v1/chat/completions",
 }
 `;
