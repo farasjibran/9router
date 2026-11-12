@@ -20,6 +20,10 @@ export default {
   transport: {
     baseUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
     validateUrl: "https://integrate.api.nvidia.com/v1/models",
+    timeoutMs: 90000,
+    quirks: {
+      dropClientMetadata: true,
+    },
   },
   models: [
     // Snapshot of https://integrate.api.nvidia.com/v1/models (85 public ids,
@@ -45,6 +49,11 @@ export default {
     { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B" },
     { id: "nvidia/nemotron-3.5-embed-8b", name: "Nemotron 3.5 Embed 8B", kind: "embedding" },
     { id: "nvidia/llama-nemotron-embed-vl-1b-v2", name: "Llama Nemotron Embed VL 1B v2", kind: "embedding" },
+    { id: "nvidia/nemotron-3.5-bolt-e4b", name: "Nemotron 3.5 Bolt" },
+    { id: "poolside/laguna-xs-2.1", name: "Laguna XS 2.1" },
+    { id: "meta/llama-guard-4-12b", name: "Llama Guard 4 12B" },
+    { id: "nvidia/riva-translate-4b-instruct-v2", name: "Riva Translate 4B v2" },
+    { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
   ],
   serviceKinds: ["llm","tts","embedding"],
   modelsFetcher: { url: "https://integrate.api.nvidia.com/v1/models", type: "openai" },
