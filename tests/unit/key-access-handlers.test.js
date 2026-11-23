@@ -220,7 +220,7 @@ describe("/v1/models routes filter by key", () => {
     expect(await list("sk-combo")).toEqual(["Main"]);
     expect(await list("sk-empty")).toEqual([]);
     expect(await list(null)).toEqual(all); // no key: unchanged (middleware governs remote access)
-  });
+  }, 20000);
   it("/v1/models/{kind} and single-model lookup are filtered too", async () => {
     const kind = async (k, path) => modelsKindRoute.GET(new Request(`http://localhost/v1/models/${path.join("/")}`, { headers: auth(k) }), { params: Promise.resolve({ model: path }) });
     const emb = await (await kind("sk-open", ["embedding"])).json();

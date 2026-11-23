@@ -43,15 +43,15 @@ describe("Usage stats API key attribution", () => {
       status: "ok",
     });
 
-    const stats = await db.getUsageStats("24h");
-    const apiKeyEntries = Object.values(stats.byApiKey);
+    for (const period of ["24h", "all"]) {
+      const stats = await db.getUsageStats(period);
+      const apiKeyEntries = Object.values(stats.byApiKey);
 
-    expect(apiKeyEntries).toHaveLength(2);
-
-    expect(
-      apiKeyEntries
-        .map((entry) => entry.promptTokens)
-        .sort((a, b) => a - b)
-    ).toEqual([10, 20]);
+      expect(apiKeyEntries).toHaveLength(2);
+      expect(Object.keys(stats.byApiKey).join(" ")).not.toContain(apiKeyA);
+      expect(Object.keys(stats.byApiKey).join(" ")).not.toContain(apiKeyB);
+      expect(apiKeyEntries.map((entry) => entry.promptTokens).sort((a, b) => a - b)).toEqual([10, 20]);
+      for (const entry of apiKeyEntries) expect(entry.lastUsed).toContain("T");
+    }
   });
 });

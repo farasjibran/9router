@@ -8,6 +8,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+  proxyAwareFetch: (...args) => global.fetch(...args),
+}));
+
 const originalFetch = global.fetch;
 
 function mockFetchOnce(payload, { ok = true, status = 200 } = {}) {

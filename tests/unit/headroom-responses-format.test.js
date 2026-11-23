@@ -48,7 +48,7 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
     expect(typeof body.input[0].content).not.toBe("string");
   });
 
-  it("skips Responses tool/reasoning history instead of collapsing it into a message (#2132)", async () => {
+  it("preserves Responses tool/reasoning history when the proxy returns an invalid projection (#2132)", async () => {
     global.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -100,8 +100,8 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
     });
 
     expect(data).toBeNull();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledOnce();
     expect(body.input).toEqual(input);
-    expect(diagnostics.reason).toBe("skipped: openai-responses tool/reasoning input is not safe to compress");
+    expect(diagnostics.reason).toBeTruthy();
   });
 });

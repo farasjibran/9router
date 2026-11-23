@@ -91,11 +91,11 @@ describe("KiroExecutor thinking tag stripping", () => {
     
     // Check that we got chat.completion.chunk outputs
     expect(output).toContain("chat.completion.chunk");
-    // Ensure the thinking parts are gone
+    // Tags are removed while thinking is emitted separately from answer content.
     expect(output).not.toContain("<thinking>");
-    expect(output).not.toContain("Let me think...");
-    expect(output).not.toContain("still thinking...");
     expect(output).not.toContain("</thinking>");
+    expect(output).toContain('"reasoning_content":"Let me think..."');
+    expect(output).toContain('"reasoning_content":"still thinking..."');
     
     // Check that the normal content is preserved
     // Parse the data chunks

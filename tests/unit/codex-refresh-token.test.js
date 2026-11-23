@@ -9,6 +9,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+  proxyAwareFetch: (...args) => global.fetch(...args),
+}));
+
 const originalFetch = global.fetch;
 
 describe("Codex Refresh Token", () => {

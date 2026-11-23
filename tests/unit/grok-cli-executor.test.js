@@ -27,8 +27,10 @@ describe("grok-cli registry", () => {
     expect(oauth.clientId).toBe("b1a00492-073a-47ea-816f-4c329264a828");
     expect(oauth.deviceCodeUrl).toContain("auth.x.ai");
     expect(oauth.scope).toContain("grok-cli:access");
-    expect(oauth.scope).toContain("conversations:write");
-    expect(oauth.referrer).toBe("grok-build");
+    expect(oauth.scope).toContain("grok-cli:access");
+    expect(oauth.scope).toContain("api:access");
+    expect(oauth.scope).not.toContain("conversations:write");
+    expect(oauth.referrer).toBeUndefined();
 
     expect(PROVIDER_MODELS.gcli?.some((m) => m.id === "grok-build")).toBe(true);
   });

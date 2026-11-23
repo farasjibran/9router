@@ -1,4 +1,4 @@
-import test from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { stripUnsupportedParams } from "../../open-sse/translator/concerns/paramSupport.js";
 import nvidiaConfig from "../../open-sse/providers/registry/nvidia.js";
@@ -93,4 +93,46 @@ test("NVIDIA model capabilities distinguish tools support", () => {
 
   assert.equal(llamaCaps.tools, true);
   assert.equal(minimaxCaps.tools, false);
+});
+
+test("NVIDIA registry drops the deleted nv-embedqa-e5-v5 model", () => {
+  const ids = nvidiaConfig.models.map((m) => m.id);
+  assert.equal(ids.includes("nvidia/nv-embedqa-e5-v5"), false);
+});
+
+test("NVIDIA registry lists the live embedding models", () => {
+  const ids = nvidiaConfig.models.map((m) => m.id);
+  const expected = [
+    "nvidia/nemotron-3.5-embed-8b",
+    "nvidia/nemotron-3.5-embed-1b",
+    "nvidia/nemotron-3-embed-1b",
+    "nvidia/nv-embedqa-mistral-7b-v2",
+    "nvidia/embed-qa-4",
+    "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+    "nvidia/llama-3.2-nv-embedqa-1b-v1",
+    "nvidia/nvclip",
+  ];
+  for (const id of expected) assert.equal(ids.includes(id), true, `missing ${id}`);
+  for (const id of expected) {
+    const m = nvidiaConfig.models.find((x) => x.id === id);
+    assert.equal(m.kind, "embedding");
+  }
+});
+
+test("NVIDIA asymmetric embedding models declare the input_type param, nvclip does not", () => {
+  const asymmetric = [
+    "nvidia/nemotron-3.5-embed-8b",
+    "nvidia/nemotron-3.5-embed-1b",
+    "nvidia/nemotron-3-embed-1b",
+    "nvidia/nv-embedqa-mistral-7b-v2",
+    "nvidia/embed-qa-4",
+    "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+    "nvidia/llama-3.2-nv-embedqa-1b-v1",
+  ];
+  for (const id of asymmetric) {
+    const m = nvidiaConfig.models.find((x) => x.id === id);
+    assert.deepEqual(m.params, ["input_type"], `${id} should declare input_type`);
+  }
+  const nvclip = nvidiaConfig.models.find((x) => x.id === "nvidia/nvclip");
+  assert.equal(nvclip.params, undefined);
 });

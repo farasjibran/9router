@@ -151,6 +151,9 @@ import p154 from "./pollinations.js";
 import p155 from "./zro.js";
 import p156 from "./sensenova-intl.js";
 import p157 from "./synthetic.js";
+import p158 from "./opendesign-go.js";
+import p159 from "./deeprelay.js";
+import p160 from "./qwencloud.js";
 export default [
   p0,
   p1,
@@ -302,4 +305,7 @@ export default [
   p155,
   p156,
   p157,
+  p158,
+  p159,
+  p160,
 ];

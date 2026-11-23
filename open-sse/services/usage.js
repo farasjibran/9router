@@ -27,6 +27,8 @@ import { getGlmUsage } from "./usage/glm.js";
 import { getTokenHarborUsage } from "./usage/tokenharbor.js";
 import { getCommandCodeUsage } from "./usage/commandcode.js";
 import { getSyntheticUsage } from "./usage/synthetic.js";
+import { getDeepRelayUsage } from "./usage/deeprelay.js";
+import { getOpenDesignUsage } from "./usage/opendesign.js";
 import {
   getIflowUsage,
   getOllamaUsage,
@@ -72,6 +74,10 @@ const USAGE_HANDLERS = {
   "xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   commandcode: (c) => getCommandCodeUsage(c.apiKey, c.proxyOptions),
   synthetic: (c) => getSyntheticUsage(c.apiKey, c.proxyOptions),
+  deeprelay: (c) => getDeepRelayUsage(c.apiKey, c.proxyOptions),
+  // OpenDesign Go reads quota with the control-plane key from
+  // `providerSpecificData`, never the runtime apiKey (sk-amr cannot see quota).
+  "opendesign-go": (c) => getOpenDesignUsage(c),
   cursor: (c) => getCursorUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   // No quota endpoint for API keys — usage is captured from live responses and
   // re-probed on an explicit refresh (force), which spends one :free request.

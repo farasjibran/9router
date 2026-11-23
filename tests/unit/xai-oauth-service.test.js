@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("open-sse/index.js", () => ({}));
+
 describe("xai/oauth service", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -72,7 +74,9 @@ describe("xai/oauth service", () => {
       }),
     });
 
+    const fetchMock = fetch;
     const { generateAuthData } = await import("../../src/lib/oauth/providers.js");
+    vi.stubGlobal("fetch", fetchMock);
     const data = await generateAuthData("xai", "http://127.0.0.1:56121/callback");
     const parsed = new URL(data.authUrl);
 
@@ -104,6 +108,7 @@ describe("xai/oauth service", () => {
       });
 
     const { exchangeTokens } = await import("../../src/lib/oauth/providers.js");
+    vi.stubGlobal("fetch", fetchMock);
     const tokens = await exchangeTokens(
       "xai",
       "auth-code",
